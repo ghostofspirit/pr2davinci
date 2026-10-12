@@ -79,6 +79,19 @@ pyside6-deploy launch_gui.py
 
 ### Flatpak для Linux
 
+Готовый пакет для Linux x86_64 можно скачать со страницы [релиза PR2DAVINCI v1.0.0](https://github.com/ghostofspirit/pr2davinci/releases/tag/v1.0.0):
+[PR2DAVINCI-1.0.0-x86_64.flatpak](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-x86_64.flatpak).
+
+Установка и запуск скачанного пакета:
+
+```sh
+flatpak install --user ./PR2DAVINCI-1.0.0-x86_64.flatpak
+flatpak run --user com.serotoninja.PremiereToResolve
+```
+
+Пакету нужен KDE runtime 6.11 из Flathub. Если Flatpak предложит установить его,
+подтвердите установку.
+
 Манифест Flatpak и команды сборки находятся в [`flatpak/README.md`](flatpak/README.md).
 Для запуска конвертера в Flatpak ему разрешён доступ к домашней папке, чтобы
 открывать проекты Premiere и сохранять DRP-файлы. Для связи с Resolve Flatpak
