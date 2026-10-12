@@ -10,6 +10,8 @@ import sys
 import tempfile
 import time
 
+from .drp_archive import DrpArchiveError, inspect_drp_archive
+
 
 class ResolveTransferError(RuntimeError):
     pass
@@ -246,6 +248,12 @@ def _transfer_file_to_resolve(
         if staging_directory is not None:
             shutil.rmtree(staging_directory)
         raise ResolveTransferError("Resolve сообщил об успехе, но DRP-файл не появился.")
+    try:
+        inspection = inspect_drp_archive(worker_drp_path)
+    except DrpArchiveError as error:
+        if staging_directory is not None:
+            shutil.rmtree(staging_directory)
+        raise ResolveTransferError(f"Resolve экспортировал некорректный DRP: {error}") from error
     if staging_directory is not None:
         try:
             shutil.copy2(worker_drp_path, drp_path)
@@ -257,4 +265,14 @@ def _transfer_file_to_resolve(
         shutil.rmtree(staging_directory)
     if not drp_path.is_file():
         raise ResolveTransferError("DRP был создан, но не появился в выбранной папке.")
+    if on_log:
+        on_log("log_drp_verified", {
+            "video": inspection.video_clip_count,
+            "audio": inspection.audio_clip_count,
+            "media": inspection.media_item_count,
+        })
+        if inspection.unresolved_media_references:
+            on_log("log_warning", {
+                "warning": f"В DRP есть ссылки на медиа без соответствующей записи: {inspection.unresolved_media_references}."
+            })
     return drp_path
