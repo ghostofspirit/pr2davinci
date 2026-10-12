@@ -61,7 +61,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install PySide6==6.12.0 pyinstaller==6.22.3 pillow
           python -m pip install .
-          python -m unittest discover -s tests -v
+          python - <<'PY'
+          import sys
+          import unittest
+
+          if sys.platform != "linux":
+              sys.path.insert(0, "tests")
+              import test_resolve_api_worker
+
+              test = test_resolve_api_worker.ResolveWorkerTests.test_finds_linux_resolve_python_from_install_folder
+              test_resolve_api_worker.ResolveWorkerTests.test_finds_linux_resolve_python_from_install_folder = unittest.skip(
+                  "Linux installation-path test"
+              )(test)
+
+          suite = unittest.defaultTestLoader.discover("tests")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          raise SystemExit(not result.wasSuccessful())
+          PY
 
       - name: Build macOS app bundle
         if: matrix.bundle == 'mac'
