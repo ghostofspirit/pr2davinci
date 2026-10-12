@@ -1,5 +1,5 @@
 # PR2DAVINCI
-Premiere to DaVinci Resolve Project Converter
+Adobe Premiere to DaVinci Resolve Project Converter
 
 <p align="center">
   <img src="premiere_to_resolve/assets/leonardo-prime-minister.png" alt="Leonardo da Vinci as a prime minister — PR2DAVINCI mascot" width="420">
