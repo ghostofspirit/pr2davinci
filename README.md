@@ -1,5 +1,5 @@
 # PR2DAVINCI
-Premiere to DaVinci Resolve Project Converter
+Adobe Premiere to DaVinci Resolve Project Converter
 
 Первая версия — **1.0.0**. История изменений: [`CHANGELOG.md`](CHANGELOG.md).
 
