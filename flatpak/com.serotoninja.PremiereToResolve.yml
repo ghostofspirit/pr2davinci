@@ -1,0 +1,47 @@
+app-id: com.serotoninja.PremiereToResolve
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+base: io.qt.PySide.BaseApp
+base-version: '6.11'
+command: premiere-to-resolve
+cleanup-commands:
+  - /app/cleanup-BaseApp.sh
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Flatpak
+modules:
+  - name: py-premiere
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps --no-index py_premiere-0.1.0-py3-none-any.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/9c/47/274fbe4dbfad990ac9170792600b0a88c89abc60e73583ec4955a3a9197d/py_premiere-0.1.0-py3-none-any.whl
+        sha256: 955c9ddb30800e0bf6c0b03fb2b3752b52a295a9a84af7ec76ecd89b0cf0ecd1
+  - name: premiere-to-resolve
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps --no-build-isolation ./src
+      - install -Dm644 src/flatpak/com.serotoninja.PremiereToResolve.desktop /app/share/applications/com.serotoninja.PremiereToResolve.desktop
+      - install -Dm644 src/premiere_to_resolve/assets/leonardo-icon-512.png /app/share/icons/hicolor/512x512/apps/com.serotoninja.PremiereToResolve.png
+    sources:
+      - type: file
+        path: ../pyproject.toml
+        dest: src
+      - type: file
+        path: ../README.md
+        dest: src
+      - type: file
+        path: ../launch_gui.py
+        dest: src
+      - type: file
+        path: ../flatpak/com.serotoninja.PremiereToResolve.desktop
+        dest: src/flatpak
+      - type: dir
+        path: ../premiere_to_resolve
+        dest: src/premiere_to_resolve

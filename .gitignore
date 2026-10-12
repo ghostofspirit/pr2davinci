@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+build-dir*/
+.flatpak-builder/
+flatpak-repo/
+flatpak-repo-*/
+*.drp
+*.prproj
+*.fcpxml
+*.xml

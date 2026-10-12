@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PR2DAVINCI
+Comment=Convert Premiere Pro projects for import into DaVinci Resolve
+Exec=premiere-to-resolve
+Icon=com.serotoninja.PremiereToResolve
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+StartupNotify=true
