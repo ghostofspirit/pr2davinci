@@ -1,0 +1,125 @@
+name: Build desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build
+        required: true
+        default: v1.0.0
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            arch: arm64
+            runner: macos-15
+            asset: PR2DAVINCI-1.0.0-macos-arm64.zip
+            bundle: mac
+          - platform: macOS
+            arch: x86_64
+            runner: macos-15-intel
+            asset: PR2DAVINCI-1.0.0-macos-x86_64.zip
+            bundle: mac
+          - platform: Windows
+            arch: x86_64
+            runner: windows-2022
+            asset: PR2DAVINCI-1.0.0-windows-x86_64.zip
+            bundle: windows
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Validate release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ "$RELEASE_TAG" != "v1.0.0" ]]; then
+            echo "This workflow only publishes the v1.0.0 application." >&2
+            exit 1
+          fi
+
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install and test
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PySide6==6.12.0 pyinstaller==6.22.3 pillow
+          python -m pip install .
+          python -m unittest discover -s tests -v
+
+      - name: Build macOS app bundle
+        if: matrix.bundle == 'mac'
+        run: >-
+          pyinstaller --noconfirm --clean --windowed --onedir
+          --name PR2DAVINCI
+          --osx-bundle-identifier com.serotoninja.PremiereToResolve
+          --icon premiere_to_resolve/assets/leonardo-icon-512.png
+          --collect-all premiere_to_resolve
+          --collect-all py_premiere
+          launch_gui.py
+
+      - name: Archive macOS app
+        if: matrix.bundle == 'mac'
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: ditto -c -k --sequesterRsrc --keepParent dist/PR2DAVINCI.app "$ASSET"
+
+      - name: Build Windows app
+        if: matrix.bundle == 'windows'
+        run: >-
+          pyinstaller --noconfirm --clean --windowed --onedir
+          --name PR2DAVINCI
+          --icon premiere_to_resolve/assets/leonardo-icon-512.png
+          --collect-all premiere_to_resolve
+          --collect-all py_premiere
+          launch_gui.py
+
+      - name: Archive Windows app
+        if: matrix.bundle == 'windows'
+        env:
+          ASSET: ${{ matrix.asset }}
+        shell: pwsh
+        run: Compress-Archive -Path dist/PR2DAVINCI -DestinationPath $env:ASSET
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Attach desktop builds to GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform builds
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Upload assets to existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber

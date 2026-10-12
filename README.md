@@ -60,22 +60,36 @@ CC0 1.0 Universal; см. [`LICENSE`](LICENSE). Лицензии сторонни
 
 ## Сборка desktop-приложения
 
-PySide6 поддерживает desktop на Linux, macOS и Windows. Создавайте отдельную
-сборку на каждой целевой ОС: запустите следующие команды на компьютере с этой
-системой. Qt for Python рекомендует `pyside6-deploy` для сборки приложения.
+Готовые сборки для Windows и macOS прикрепляются к [релизу PR2DAVINCI v1.0.0](https://github.com/ghostofspirit/pr2davinci/releases/tag/v1.0.0):
+
+- [Windows x86_64 — portable ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-windows-x86_64.zip)
+- [macOS Apple Silicon — ARM64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-arm64.zip)
+- [macOS Intel — x86_64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-x86_64.zip)
+
+В Windows распакуйте архив и запустите `PR2DAVINCI/PR2DAVINCI.exe`. На macOS распакуйте
+архив и переместите `PR2DAVINCI.app` в «Программы». Эти сборки включают Python и
+зависимости — отдельно устанавливать Python не нужно. Resolve Studio в комплект
+не входит.
+
+Сборки публикуются workflow [`Build desktop release`](.github/workflows/release-desktop.yml)
+на нативных Windows, Intel Mac и Apple Silicon runners. Они проверяются unit-
+тестами и собираются из неизменённого тега `v1.0.0`. После распаковки Windows
+может показать предупреждение SmartScreen, а macOS — предупреждение Gatekeeper:
+приложения пока не подписаны сертификатом разработчика и не нотариализованы.
+Это не ошибка архива; для массовой установки без таких предупреждений понадобятся
+сертификат Windows code signing и Apple Developer ID/notarization.
+
+Чтобы собрать приложение самостоятельно, установите проект и PyInstaller на
+целевой ОС; сборка должна выполняться на соответствующей платформе.
 
 ```bash
-python -m pip install .
-pyside6-deploy launch_gui.py
+python -m pip install . pyinstaller pillow
+pyinstaller --noconfirm --clean --windowed --onedir \
+  --name PR2DAVINCI \
+  --collect-all premiere_to_resolve \
+  --collect-all py_premiere \
+  launch_gui.py
 ```
-
-Готовый standalone-бандл и промежуточные файлы сборки появятся в папках,
-указанных в `pysidedeploy.spec` и конфигурации Qt. Первый запуск `pyside6-deploy`
-создаёт `pysidedeploy.spec`; после проверки параметров его удобно хранить
-вместе с проектом.
-
-Сборка и запуск проверены только в текущем Linux-окружении. Для готовых
-артефактов Windows и macOS нужны сборочные машины или CI runners этих систем.
 
 ### Flatpak для Linux
 
