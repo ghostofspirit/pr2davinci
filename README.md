@@ -17,7 +17,8 @@ and command line.
 
 V2 is a preview. Its source is on the
 [`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Ready-to-download V2 desktop packages have not been published yet.
+Download the Linux x86_64 Flatpak from the
+[PR2DAVINCI V2.0 Preview release](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0-preview.3/PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak).
 
 ### What V2 does
 
@@ -60,9 +61,14 @@ for FCP 7 XML interchange.
 
 ### Linux Flatpak
 
-Build and install the V2 Flatpak using the instructions in
-[`flatpak/README.md`](flatpak/README.md). The package includes the GUI and direct
-DRP CLI. To export a project from the installed Flatpak:
+Install the downloaded bundle (it includes the GUI and direct DRP CLI):
+
+```bash
+flatpak install --user ./PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak
+```
+
+Launch the GUI with `flatpak run --user com.serotoninja.PremiereToResolve`.
+To export a project from the command line:
 
 ```bash
 flatpak run --user --command=premiere-to-resolve-drp \
@@ -89,7 +95,8 @@ V2 преобразует нативный проект Premiere `.prproj` в п
 
 V2 пока находится в статусе Preview. Исходный код — в ветке
 [`v2/direct-drp`](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Готовые сборки V2 для скачивания ещё не опубликованы.
+Скачать Flatpak для Linux x86_64 можно со страницы
+[релиза PR2DAVINCI V2.0 Preview](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0-preview.3/PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak).
 
 ### Что умеет V2
 
@@ -131,9 +138,14 @@ premiere-to-resolve-drp input.prproj -o output.drp
 
 ### Linux Flatpak
 
-Соберите и установите Flatpak V2 по инструкции в
-[`flatpak/README.md`](flatpak/README.md). В пакет входят GUI и прямая CLI-команда
-экспорта DRP. Чтобы создать DRP из установленного Flatpak:
+Установите скачанный bundle. В него входят GUI и прямая CLI-команда экспорта DRP:
+
+```bash
+flatpak install --user ./PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak
+```
+
+Запустить GUI можно командой `flatpak run --user com.serotoninja.PremiereToResolve`.
+Чтобы создать DRP из командной строки:
 
 ```bash
 flatpak run --user --command=premiere-to-resolve-drp \
