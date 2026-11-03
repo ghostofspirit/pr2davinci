@@ -4,7 +4,7 @@
 
 - Builds a DRP archive directly from Premiere projects without requiring Resolve.
 - Preserves the project’s sequences, media pool folders, and offline media items.
-- Adds the direct DRP workflow to the bilingual desktop GUI; the CLI remains limited to XML interchange.
+- Adds the same direct DRP export workflow to the bilingual desktop GUI and command line.
 - Compares generated DRP structure against a Relink reference. Resolve import validation is still pending.
 
 ## 1.0.0 — 2026-10-12

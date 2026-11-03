@@ -22,3 +22,14 @@ flatpak run --user com.serotoninja.PremiereToResolve
 The first build downloads the SDK and PySide BaseApp. The app is delivered as
 an OSTree Flatpak repository in `flatpak-repo/`; installing it requires the
 shared KDE runtime and PySide BaseApp, which Flatpak resolves from Flathub.
+
+The GUI and direct DRP command use the same offline exporter. To create a DRP
+from a native Premiere project without opening Resolve:
+
+```bash
+flatpak run --user --command=premiere-to-resolve-drp \
+  com.serotoninja.PremiereToResolve \
+  "$HOME/path/to/project.prproj" -o "$HOME/path/to/project.drp"
+```
+
+The command is included in the Flatpak build alongside the GUI launcher.

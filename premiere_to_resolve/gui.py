@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import sys
-import tempfile
 
 from PySide6.QtCore import QSettings, QRectF, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
@@ -27,8 +26,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .converter import SequenceEntry, convert_project, list_sequence_entries, preferred_drp_sequence_index, write_resolve_manifest
-from .direct_drp import DirectDrpError, create_drp_from_manifest
+from .converter import SequenceEntry, convert_project, list_sequence_entries, preferred_drp_sequence_index
+from .drp_export import export_prproj_to_drp
 
 
 TEXT = {
@@ -174,17 +173,15 @@ class TaskThread(QThread):
             assert self.output is not None
             self.log.emit("log_convert", {"name": self.sequence or ""})
             if self.mode == "drp":
-                if not self.native_project:
-                    raise DirectDrpError("Офлайн-сборка DRP сейчас принимает нативные проекты Premiere (.prproj). Для XML/FCPXML сохраните interchange-файл.")
                 cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pr2davinci" / "interchange"
                 cache.mkdir(parents=True, exist_ok=True)
-                with tempfile.TemporaryDirectory(prefix="direct-drp-", dir=cache) as temporary_directory:
-                    on_warning = lambda warning: self.log.emit("log_warning", {"warning": warning})
-                    manifest_path = Path(temporary_directory) / "timelines.json"
-                    write_resolve_manifest(self.source, manifest_path, self.sequence_index, on_warning)
-                    self.log.emit("log_direct_drp", {})
-                    on_log = lambda key, values: self.log.emit(key, values)
-                    self.output = create_drp_from_manifest(manifest_path, self.output, on_log=on_log)
+                on_warning = lambda warning: self.log.emit("log_warning", {"warning": warning})
+                self.log.emit("log_direct_drp", {})
+                on_log = lambda key, values: self.log.emit(key, values)
+                self.output = export_prproj_to_drp(
+                    self.source, self.output, temporary_root=cache,
+                    on_warning=on_warning, on_log=on_log,
+                )
             else:
                 convert_project(
                     self.source, self.output, self.sequence, self.sequence_index,

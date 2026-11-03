@@ -1,13 +1,14 @@
 [project]
 name = "premiere-to-resolve"
 version = "2.0.0"
-description = "Transfer Premiere Pro projects to DaVinci Resolve Studio"
+description = "Convert Premiere Pro projects to DaVinci Resolve DRP files"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.7,<7", "py-premiere>=0.1.0,<0.2", "zstandard>=0.23,<1"]
 
 [project.scripts]
 premiere-to-resolve = "premiere_to_resolve.gui:main"
 premiere-to-resolve-cli = "premiere_to_resolve.cli:main"
+premiere-to-resolve-drp = "premiere_to_resolve.drp_cli:main"
 
 [tool.pyside6.deploy]
 title = "Premiere to Resolve"

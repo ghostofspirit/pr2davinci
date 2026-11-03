@@ -97,9 +97,17 @@ flatpak run --user com.serotoninja.PremiereToResolve
 
 ## Командная строка
 
-Прямой экспорт DRP в V2 доступен через GUI; режима конвертации DRP из командной
-строки пока нет. Существующая команда `premiere-to-resolve-cli` создаёт только
-FCP 7 XML для обмена и не вызывает генератор DRP:
+В V2 один и тот же прямой экспорт DRP доступен через GUI и командную строку.
+Команда `premiere-to-resolve-drp` принимает нативный `.prproj`, сохраняет все
+секвенции и папки проекта и не запускает Resolve:
+
+```bash
+premiere-to-resolve-drp input.prproj -o output.drp
+```
+
+Если файл с таким именем уже существует, конвертер подберёт свободное имя с
+суффиксом `(2)`, `(3)` и так далее. Для просмотра секвенций и экспорта
+interchange XML остаётся команда `premiere-to-resolve-cli`:
 
 ```bash
 premiere-to-resolve-cli input.prproj --list-sequences
