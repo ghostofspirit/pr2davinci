@@ -45,15 +45,58 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+  rpm:
+    name: Build Fedora 44 RPM
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Check out tagged V2 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install RPM build dependencies
+        run: dnf install -y git-core rpm-build python3-pip python3-pyside6 python3-zstandard
+
+      - name: Build RPM
+        run: |
+          top="$GITHUB_WORKSPACE/rpmbuild"
+          mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} release-assets
+          cp packaging/rpm/premiere-to-resolve.spec "$top/SPECS/"
+          git archive --format=tar --prefix=premiere-to-resolve-2.0.0/ HEAD \
+            | gzip -n > "$top/SOURCES/premiere-to-resolve-2.0.0.tar.gz"
+          wheel="$top/SOURCES/py_premiere-0.1.0-py3-none-any.whl"
+          curl -fsSL \
+            https://files.pythonhosted.org/packages/9c/47/274fbe4dbfad990ac9170792600b0a88c89abc60e73583ec4955a3a9197d/py_premiere-0.1.0-py3-none-any.whl \
+            -o "$wheel"
+          echo '955c9ddb30800e0bf6c0b03fb2b3752b52a295a9a84af7ec76ecd89b0cf0ecd1  '"$wheel" | sha256sum --check
+          rpmbuild -bb --define "_topdir $top" \
+            "$top/SPECS/premiere-to-resolve.spec"
+          cp "$top"/RPMS/noarch/*.rpm release-assets/
+
+      - name: Upload Fedora RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fedora-44-RPM
+          path: release-assets/*.rpm
+          if-no-files-found: error
+          retention-days: 2
+
   publish:
     name: Publish V2 Linux preview release
-    needs: flatpak
+    needs: [flatpak, rpm]
     runs-on: ubuntu-latest
     steps:
       - name: Download Flatpak bundle
         uses: actions/download-artifact@v4
         with:
           name: Linux-x86_64
+          path: release-assets
+
+      - name: Download Fedora RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: Fedora-44-RPM
           path: release-assets
 
       - name: Create preview release and attach Flatpak
@@ -68,7 +111,7 @@ jobs:
 
           **Русский:** V2 напрямую создаёт DRP DaVinci Resolve из проекта Premiere Pro. В архив входят секвенции и папки проекта; медиа может потребовать relink. Проверка открытия в Resolve остаётся ручным шагом для preview-версии.
 
-          This preview currently provides a Linux Flatpak build. Windows and macOS builds are not included yet. The package is unsigned and separate from older releases.
+          This preview provides a Linux x86_64 Flatpak and a Fedora 44 RPM. Windows and macOS builds are not included yet. The packages are unsigned and separate from older releases.
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* \
