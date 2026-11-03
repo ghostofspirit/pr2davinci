@@ -1,19 +1,38 @@
 # PR2DAVINCI
-Adobe Premiere to DaVinci Resolve Project Converter
+
+**Adobe Premiere Pro → DaVinci Resolve — V2.0 Preview**
 
 <p align="center">
   <img src="premiere_to_resolve/assets/leonardo-prime-minister.png" alt="Leonardo da Vinci as a prime minister — PR2DAVINCI mascot" width="420">
 </p>
 
-Первая версия — **1.0.0**. История изменений: [`CHANGELOG.md`](CHANGELOG.md).
+V2 converts a native Premiere `.prproj` project into a DaVinci Resolve `.drp`
+file. It writes the DRP directly, so Resolve does not need to be installed or
+running during conversion. The same exporter is available in the desktop GUI
+and command line.
 
-Кроссплатформенный desktop-конвертер Adobe Premiere Pro в DaVinci Resolve.
-Приложение читает обычные и gzip-сжатые `.prproj`, переносит выбранную секвенцию
-в DaVinci Resolve Studio и автоматически экспортирует проект в `.drp`.
+The V2 source is on the [`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
+The default branch and downloadable Windows, macOS, and Flatpak packages below
+still contain the stable V1.0 release. V2 desktop builds are not published yet.
 
-## Запуск
+## What V2 does
 
-Нужен Python 3.10 или новее.
+- Includes the project's timelines, media pool bins, and media references in
+  the DRP.
+- Leaves source media offline when it is not available, so it can be relinked
+  in Resolve later.
+- Offers the same DRP export through the GUI and the `premiere-to-resolve-drp`
+  command.
+- Does not launch Resolve or modify a project already open there.
+
+The generated archive has been compared offline with a Relink-created DRP.
+Opening the V2-generated file in Resolve still needs manual validation. Effects,
+transitions, retiming, multicam, Essential Graphics, and Lumetri may need review
+or reconstruction.
+
+## Run V2 from source
+
+Python 3.10 or newer is required.
 
 ```bash
 python -m venv .venv
@@ -22,102 +41,45 @@ python -m pip install .
 premiere-to-resolve
 ```
 
-На Windows активируйте окружение командой `.venv\\Scripts\\activate`.
-При первом запуске окно можно переключить между русским и английским.
+On Windows, activate the environment with `.venv\\Scripts\\activate`.
 
-## Конвертация
+To create a DRP from the whole Premiere project:
 
-Перетащите `.prproj` в окно или выберите его кнопкой. Укажите секвенцию,
-папку и имя файла. «Передать проект в Resolve Studio» автоматически создаёт
-DRP, а «Сохранить XML» экспортирует interchange-файл для ручного импорта:
-FCPXML для нативных `.prproj` и FCP 7 XML для XML-представления Premiere.
-Список содержит только секвенции проекта (без вложенных ссылок), поддерживает
-поиск по имени и различает одноимённые секвенции по их ID.
-Если Resolve не найден автоматически, укажите исполняемый файл Resolve Studio.
+```bash
+premiere-to-resolve-drp input.prproj -o output.drp
+```
 
-Для локальной передачи нужна DaVinci Resolve Studio с включённым внешним
-scripting (**Preferences → System → General → External scripting using → Local**).
-Если Resolve не запущен, PR2DAVINCI запустит его. Перед передачей закройте
-открытый в Resolve проект; если в нём есть изменения, сначала сохраните их.
-Импортированный таймлайн сохраняется в DRP автоматически; временный проект
-удаляется из базы Resolve.
+The command saves all project timelines and bins without launching Resolve. If
+the output name already exists, it chooses the next available name, such as
+`output (2).drp`. The older `premiere-to-resolve-cli` command remains available
+for FCP 7 XML interchange.
 
-Нативные `.prproj` разбираются библиотекой py-premiere и экспортируются в
-FCPXML 1.9 — формат, который Resolve импортирует напрямую. Клиповые точки,
-дорожки, тайминг и доступные ссылки на медиа переносятся; если Windows-пути
-можно сопоставить с подключённым диском проекта, приложение делает это
-автоматически. Несопоставленные файлы потребуют relink в Resolve, а в журнале
-будут отмечены пропущенные синтетические клипы и неподдержанные эффекты,
-переходы или изменение скорости. Вложенные и multicam-секвенции,
-Essential Graphics и Lumetri могут требовать ручной проверки.
+## Linux Flatpak
 
-Разбор Premiere использует стороннюю библиотеку [py-premiere](https://github.com/Pouf/py-premiere)
-(MIT License); её лицензия распространяется вместе с установленным пакетом.
+The published Flatpak is V1.0. The V2 Flatpak build also includes the direct DRP
+CLI; after installing a V2 build, run it with:
 
-Исходный код и материалы PR2DAVINCI посвящены общественному достоянию по
-CC0 1.0 Universal; см. [`LICENSE`](LICENSE). Лицензии сторонних компонентов
-и ограничения на права третьих лиц остаются в силе.
+```bash
+flatpak run --user --command=premiere-to-resolve-drp \
+  com.serotoninja.PremiereToResolve \
+  "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
+```
 
-## Сборка desktop-приложения
+The Flatpak manifest and build instructions are in [`flatpak/README.md`](flatpak/README.md).
+Native RPM and DEB packages are not available yet.
 
-Готовые сборки для Windows и macOS прикрепляются к [релизу PR2DAVINCI v1.0.0](https://github.com/ghostofspirit/pr2davinci/releases/tag/v1.0.0):
+## Stable V1.0 downloads
+
+These published builds are V1.0; they do not include the direct offline DRP
+export introduced in V2.
 
 - [Windows x86_64 — portable ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-windows-x86_64.zip)
 - [macOS Apple Silicon — ARM64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-arm64.zip)
 - [macOS Intel — x86_64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-x86_64.zip)
+- [Linux x86_64 — Flatpak](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-x86_64.flatpak)
 
-В Windows распакуйте архив и запустите `PR2DAVINCI/PR2DAVINCI.exe`. На macOS распакуйте
-архив и переместите `PR2DAVINCI.app` в «Программы». Эти сборки включают Python и
-зависимости — отдельно устанавливать Python не нужно. Resolve Studio в комплект
-не входит.
+## License
 
-Сборки публикуются workflow [`Build desktop release`](.github/workflows/release-desktop.yml)
-на нативных Windows, Intel Mac и Apple Silicon runners. Они проверяются unit-
-тестами и собираются из неизменённого тега `v1.0.0`. После распаковки Windows
-может показать предупреждение SmartScreen, а macOS — предупреждение Gatekeeper:
-приложения пока не подписаны сертификатом разработчика и не нотариализованы.
-Это не ошибка архива; для массовой установки без таких предупреждений понадобятся
-сертификат Windows code signing и Apple Developer ID/notarization.
-
-Чтобы собрать приложение самостоятельно, установите проект и PyInstaller на
-целевой ОС; сборка должна выполняться на соответствующей платформе.
-
-```bash
-python -m pip install . pyinstaller pillow
-pyinstaller --noconfirm --clean --windowed --onedir \
-  --name PR2DAVINCI \
-  --collect-all premiere_to_resolve \
-  --collect-all py_premiere \
-  launch_gui.py
-```
-
-### Flatpak для Linux
-
-Готовый пакет для Linux x86_64 можно скачать со страницы [релиза PR2DAVINCI v1.0.0](https://github.com/ghostofspirit/pr2davinci/releases/tag/v1.0.0):
-[PR2DAVINCI-1.0.0-x86_64.flatpak](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-x86_64.flatpak).
-
-Установка и запуск скачанного пакета:
-
-```sh
-flatpak install --user ./PR2DAVINCI-1.0.0-x86_64.flatpak
-flatpak run --user com.serotoninja.PremiereToResolve
-```
-
-Пакету нужен KDE runtime 6.11 из Flathub. Если Flatpak предложит установить его,
-подтвердите установку.
-
-Манифест Flatpak и команды сборки находятся в [`flatpak/README.md`](flatpak/README.md).
-Для запуска конвертера в Flatpak ему разрешён доступ к домашней папке, чтобы
-открывать проекты Premiere и сохранять DRP-файлы. Для связи с Resolve Flatpak
-использует `flatpak-spawn --host` и запускает ResolvePython на хосте.
-
-## CLI
-
-GUI — основной способ запуска. Для командной строки установите проект и
-используйте отдельную команду, чтобы отдельно создать XML:
-
-```bash
-premiere-to-resolve-cli input.prproj --list-sequences
-premiere-to-resolve-cli input.prproj -o timeline.fcpxml --sequence "Edit v3"
-```
-
+PR2DAVINCI source and materials are dedicated to the public domain under
+[CC0 1.0 Universal](LICENSE). Third-party components retain their own licenses;
+see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
