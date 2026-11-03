@@ -56,14 +56,15 @@ jobs:
           ref: ${{ github.ref }}
 
       - name: Install RPM build dependencies
-        run: dnf install -y git-core rpm-build python3-pip python3-pyside6 python3-zstandard
+        run: dnf install -y git-core rpm-build python3-pip python3-pyside6 python3-zstandard gzip curl-minimal coreutils
 
       - name: Build RPM
         run: |
+          set -euxo pipefail
           top="$GITHUB_WORKSPACE/rpmbuild"
           mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} release-assets
           cp packaging/rpm/premiere-to-resolve.spec "$top/SPECS/"
-          git archive --format=tar --prefix=premiere-to-resolve-2.0.0/ HEAD \
+          git -c safe.directory="$GITHUB_WORKSPACE" archive --format=tar --prefix=premiere-to-resolve-2.0.0/ "$GITHUB_SHA" \
             | gzip -n > "$top/SOURCES/premiere-to-resolve-2.0.0.tar.gz"
           wheel="$top/SOURCES/py_premiere-0.1.0-py3-none-any.whl"
           curl -fsSL \
