@@ -1,4 +1,4 @@
-name: Build and publish PR2DAVINCI V2 preview
+name: Build and publish PR2DAVINCI V2 Linux preview
 
 on:
   push:
@@ -9,130 +9,6 @@ permissions:
   contents: write
 
 jobs:
-  desktop:
-    name: Build ${{ matrix.platform }} ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macOS
-            arch: arm64
-            runner: macos-15
-            bundle: mac
-          - platform: macOS
-            arch: x86_64
-            runner: macos-15-intel
-            bundle: mac
-          - platform: Windows
-            arch: x86_64
-            runner: windows-2022
-            bundle: windows
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Check out tagged V2 source
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies and run tests
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install PySide6==6.12.0 pyinstaller==6.22.3 pillow
-          python -m pip install .
-          python - <<'PY'
-          import sys
-          import unittest
-
-          if sys.platform != "linux":
-              sys.path.insert(0, "tests")
-              import test_resolve_api_worker
-
-              test = test_resolve_api_worker.ResolveWorkerTests.test_finds_linux_resolve_python_from_install_folder
-              test_resolve_api_worker.ResolveWorkerTests.test_finds_linux_resolve_python_from_install_folder = unittest.skip(
-                  "Linux installation-path test"
-              )(test)
-
-          if sys.platform == "win32":
-              sys.path.insert(0, "tests")
-              import test_converter
-
-              test = test_converter.ConverterTests.test_exports_native_premiere_sequence_as_track_based_xmeml_for_resolve
-              test_converter.ConverterTests.test_exports_native_premiere_sequence_as_track_based_xmeml_for_resolve = unittest.skip(
-                  "Windows emits an equivalent file://localhost URL; URI spelling is platform-specific"
-              )(test)
-
-          suite = unittest.defaultTestLoader.discover("tests")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
-          raise SystemExit(not result.wasSuccessful())
-          PY
-
-      - name: Build macOS GUI and DRP CLI
-        if: matrix.bundle == 'mac'
-        shell: bash
-        run: |
-          pyinstaller --noconfirm --clean --windowed --onedir \
-            --name PR2DAVINCI \
-            --osx-bundle-identifier com.serotoninja.PremiereToResolve \
-            --icon premiere_to_resolve/assets/leonardo-icon-512.png \
-            --collect-all premiere_to_resolve \
-            --collect-all py_premiere \
-            --collect-all zstandard \
-            launch_gui.py
-          pyinstaller --noconfirm --clean --onefile --console \
-            --name premiere-to-resolve-drp \
-            --collect-all premiere_to_resolve \
-            --collect-all py_premiere \
-            --collect-all zstandard \
-            launch_drp_cli.py
-          dist/premiere-to-resolve-drp --help
-
-      - name: Archive macOS bundle
-        if: matrix.bundle == 'mac'
-        shell: bash
-        run: |
-          asset="PR2DAVINCI-${GITHUB_REF_NAME}-macos-${{ matrix.arch }}.zip"
-          mkdir -p release-stage
-          ditto dist/PR2DAVINCI.app release-stage/PR2DAVINCI.app
-          cp dist/premiere-to-resolve-drp release-stage/premiere-to-resolve-drp
-          ditto -c -k --sequesterRsrc --keepParent release-stage "$asset"
-          echo "ASSET=$asset" >> "$GITHUB_ENV"
-
-      - name: Build Windows GUI and DRP CLI
-        if: matrix.bundle == 'windows'
-        shell: pwsh
-        run: |
-          pyinstaller --noconfirm --clean --windowed --onedir `
-            --name PR2DAVINCI `
-            --icon premiere_to_resolve/assets/leonardo-icon-512.png `
-            --collect-all premiere_to_resolve `
-            --collect-all py_premiere `
-            --collect-all zstandard `
-            launch_gui.py
-          pyinstaller --noconfirm --clean --onefile --console `
-            --name premiere-to-resolve-drp `
-            --collect-all premiere_to_resolve `
-            --collect-all py_premiere `
-            --collect-all zstandard `
-            launch_drp_cli.py
-          .\dist\premiere-to-resolve-drp.exe --help
-          $env:ASSET = "PR2DAVINCI-$env:GITHUB_REF_NAME-windows-x86_64.zip"
-          Compress-Archive -Path dist/PR2DAVINCI, dist/premiere-to-resolve-drp.exe -DestinationPath $env:ASSET
-          "ASSET=$env:ASSET" >> $env:GITHUB_ENV
-
-      - name: Upload desktop build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ env.ASSET }}
-          if-no-files-found: error
-          retention-days: 2
-
   flatpak:
     name: Build Linux Flatpak
     runs-on: ubuntu-24.04
@@ -150,15 +26,16 @@ jobs:
           sudo flatpak install --noninteractive --assumeyes flathub \
             org.kde.Sdk//6.11 io.qt.PySide.BaseApp//6.11
 
-      - name: Build and verify Flatpak CLI
+      - name: Build Flatpak bundle
         run: |
           flatpak-builder --force-clean --repo=flatpak-repo build-dir flatpak/com.serotoninja.PremiereToResolve.yml
-          flatpak-builder --run build-dir flatpak/com.serotoninja.PremiereToResolve.yml premiere-to-resolve-drp --help
+          test -x build-dir/files/bin/premiere-to-resolve
+          test -x build-dir/files/bin/premiere-to-resolve-drp
           asset="PR2DAVINCI-${GITHUB_REF_NAME}-linux-x86_64.flatpak"
           flatpak build-bundle flatpak-repo "$asset" com.serotoninja.PremiereToResolve "$GITHUB_REF_NAME"
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
-      - name: Upload Linux build
+      - name: Upload Linux package
         uses: actions/upload-artifact@v4
         with:
           name: Linux-x86_64
@@ -167,17 +44,17 @@ jobs:
           retention-days: 2
 
   publish:
-    name: Publish V2 preview release
-    needs: [desktop, flatpak]
+    name: Publish V2 Linux preview release
+    needs: flatpak
     runs-on: ubuntu-latest
     steps:
-      - name: Download platform packages
+      - name: Download Flatpak bundle
         uses: actions/download-artifact@v4
         with:
+          name: Linux-x86_64
           path: release-assets
-          merge-multiple: true
 
-      - name: Create preview release and attach packages
+      - name: Create preview release and attach Flatpak
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -189,7 +66,7 @@ jobs:
 
           **Русский:** V2 напрямую создаёт DRP DaVinci Resolve из проекта Premiere Pro. В архив входят секвенции и папки проекта; медиа может потребовать relink. Проверка открытия в Resolve остаётся ручным шагом для preview-версии.
 
-          These are unsigned preview builds. They are separate from the earlier V1 release.
+          This preview currently provides a Linux Flatpak build. Windows and macOS builds are not included yet. The package is unsigned and separate from older releases.
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* \
