@@ -32,7 +32,9 @@ jobs:
           test -x build-dir/files/bin/premiere-to-resolve
           test -x build-dir/files/bin/premiere-to-resolve-drp
           asset="PR2DAVINCI-${GITHUB_REF_NAME}-linux-x86_64.flatpak"
-          flatpak build-bundle flatpak-repo "$asset" com.serotoninja.PremiereToResolve "$GITHUB_REF_NAME"
+          # flatpak-builder defaults to the "master" branch unless configured otherwise.
+          # The release tag names the asset, not the OSTree ref inside the bundle.
+          flatpak build-bundle flatpak-repo "$asset" com.serotoninja.PremiereToResolve master
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
       - name: Upload Linux package
