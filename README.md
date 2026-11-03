@@ -11,9 +11,9 @@ file. It writes the DRP directly, so Resolve does not need to be installed or
 running during conversion. The same exporter is available in the desktop GUI
 and command line.
 
-The V2 source is on the [`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-The default branch and downloadable Windows, macOS, and Flatpak packages below
-still contain the stable V1.0 release. V2 desktop builds are not published yet.
+V2 is a preview. Its source is on the
+[`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
+Ready-to-download V2 desktop packages have not been published yet.
 
 ## What V2 does
 
@@ -56,8 +56,9 @@ for FCP 7 XML interchange.
 
 ## Linux Flatpak
 
-The published Flatpak is V1.0. The V2 Flatpak build also includes the direct DRP
-CLI; after installing a V2 build, run it with:
+Build and install the V2 Flatpak using the instructions in
+[`flatpak/README.md`](flatpak/README.md). The package includes the GUI and direct
+DRP CLI. To export a project from the installed Flatpak:
 
 ```bash
 flatpak run --user --command=premiere-to-resolve-drp \
@@ -65,18 +66,7 @@ flatpak run --user --command=premiere-to-resolve-drp \
   "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
 ```
 
-The Flatpak manifest and build instructions are in [`flatpak/README.md`](flatpak/README.md).
-Native RPM and DEB packages are not available yet.
-
-## Stable V1.0 downloads
-
-These published builds are V1.0; they do not include the direct offline DRP
-export introduced in V2.
-
-- [Windows x86_64 — portable ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-windows-x86_64.zip)
-- [macOS Apple Silicon — ARM64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-arm64.zip)
-- [macOS Intel — x86_64 ZIP](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-macos-x86_64.zip)
-- [Linux x86_64 — Flatpak](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-x86_64.flatpak)
+V2 does not currently provide RPM or DEB packages.
 
 ## License
 
