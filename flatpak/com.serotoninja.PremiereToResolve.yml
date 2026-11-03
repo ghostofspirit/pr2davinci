@@ -23,6 +23,14 @@ modules:
       - type: file
         url: https://files.pythonhosted.org/packages/9c/47/274fbe4dbfad990ac9170792600b0a88c89abc60e73583ec4955a3a9197d/py_premiere-0.1.0-py3-none-any.whl
         sha256: 955c9ddb30800e0bf6c0b03fb2b3752b52a295a9a84af7ec76ecd89b0cf0ecd1
+  - name: zstandard
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps --no-index zstandard-0.25.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/63/4b/e3678b4e776db00f9f7b2fe58e547e8928ef32727d7a1ff01dea010f3f13/zstandard-0.25.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: 8e735494da3db08694d26480f1493ad2cf86e99bdd53e8e9771b2752a5c0246a
   - name: premiere-to-resolve
     buildsystem: simple
     build-commands:

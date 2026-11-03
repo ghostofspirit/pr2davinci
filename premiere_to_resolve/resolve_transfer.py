@@ -11,6 +11,7 @@ import tempfile
 import time
 
 from .drp_archive import DrpArchiveError, inspect_drp_archive
+from .offline_media import OfflineMediaError, repoint_drp_media
 
 
 class ResolveTransferError(RuntimeError):
@@ -127,6 +128,7 @@ def _worker_command(installation: ResolveInstallation, args: list[str]) -> list[
         host_worker = Path.home() / ".cache" / "pr2davinci" / "resolve_api_worker.py"
         host_worker.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(worker, host_worker)
+        shutil.copyfile(worker.with_name("offline_media.py"), host_worker.with_name("offline_media.py"))
         return ["flatpak-spawn", "--host", str(installation.python), str(host_worker), *args]
     return [str(installation.python), str(worker), *args]
 
@@ -198,6 +200,7 @@ def _transfer_file_to_resolve(
     drp_path = _available_drp_path(drp_path)
     staging_directory: Path | None = None
     worker_drp_path = drp_path
+    uses_offline_proxies = input_flag == "--manifest"
     check = _run_worker(installation, ["--check"])
     if not check.get("connected"):
         if on_log:
@@ -219,12 +222,14 @@ def _transfer_file_to_resolve(
             )
     if on_log:
         on_log("log_transfer_resolve", {})
-    if os.environ.get("FLATPAK_ID"):
+    if os.environ.get("FLATPAK_ID") or uses_offline_proxies:
         cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pr2davinci" / "exports"
         cache.mkdir(parents=True, exist_ok=True)
         staging_directory = Path(tempfile.mkdtemp(prefix="export-", dir=cache))
         worker_drp_path = staging_directory / drp_path.name
     args = [input_flag, str(payload_path), "--drp", str(worker_drp_path)]
+    if uses_offline_proxies and staging_directory is not None:
+        args.extend(["--proxy-dir", str(staging_directory / "media")])
     if allow_project_switch:
         args.append("--switch-open-project")
     try:
@@ -254,6 +259,24 @@ def _transfer_file_to_resolve(
         if staging_directory is not None:
             shutil.rmtree(staging_directory)
         raise ResolveTransferError(f"Resolve экспортировал некорректный DRP: {error}") from error
+    if uses_offline_proxies:
+        try:
+            mappings = {
+                str(mapping["from"]): str(mapping["to"])
+                for mapping in result.get("media_mappings", [])
+            }
+            if not mappings:
+                raise OfflineMediaError("Resolve не вернул список временных медиа-ссылок.")
+            repointed = repoint_drp_media(worker_drp_path, mappings)
+            if on_log:
+                on_log("log_warning", {
+                    "warning": f"Офлайн-медиа привязано к исходным путям: {len(repointed)} файлов; их можно relink в Resolve."
+                })
+            inspection = inspect_drp_archive(worker_drp_path)
+        except (KeyError, TypeError, OfflineMediaError, DrpArchiveError) as error:
+            if staging_directory is not None:
+                shutil.rmtree(staging_directory, ignore_errors=True)
+            raise ResolveTransferError(f"Не удалось подготовить DRP с офлайн-медиа: {error}") from error
     if staging_directory is not None:
         try:
             shutil.copy2(worker_drp_path, drp_path)
@@ -262,7 +285,7 @@ def _transfer_file_to_resolve(
                 f"Resolve создал DRP, но не удалось скопировать его в выбранную папку: {error}. "
                 f"Временная копия сохранена: {worker_drp_path}"
             ) from error
-        shutil.rmtree(staging_directory)
+        shutil.rmtree(staging_directory, ignore_errors=True)
     if not drp_path.is_file():
         raise ResolveTransferError("DRP был создан, но не появился в выбранной папке.")
     if on_log:

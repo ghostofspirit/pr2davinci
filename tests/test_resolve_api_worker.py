@@ -2,6 +2,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from unittest import mock
 from unittest.mock import Mock
 
 from premiere_to_resolve.resolve_api_worker import (
@@ -52,7 +53,7 @@ class ResolveWorkerTests(unittest.TestCase):
         self.assertEqual(raised.exception.project_name, "Current cut")
         manager.CreateProject.assert_not_called()
 
-    def test_saves_and_closes_open_project_then_leaves_successful_transfer_open(self):
+    def test_saves_and_reopens_existing_project_after_export(self):
         with tempfile.TemporaryDirectory() as directory:
             xml_path = Path(directory) / "timeline.xml"
             drp_path = Path(directory) / "edit.drp"
@@ -79,12 +80,12 @@ class ResolveWorkerTests(unittest.TestCase):
             export_timeline(resolve, xml_path, drp_path, allow_project_switch=True)
 
             manager.SaveProject.assert_has_calls([unittest.mock.call(), unittest.mock.call()])
-            manager.CloseProject.assert_called_once_with(current)
-            manager.DeleteProject.assert_not_called()
-            manager.LoadProject.assert_not_called()
+            manager.CloseProject.assert_has_calls([unittest.mock.call(current), unittest.mock.call(project)])
+            manager.DeleteProject.assert_called_once()
+            manager.LoadProject.assert_called_once_with("Current cut")
             self.assertEqual(drp_path.read_bytes(), b"DRP")
 
-    def test_imports_exports_and_leaves_the_transferred_project_open(self):
+    def test_exports_drp_then_closes_temporary_project(self):
         with tempfile.TemporaryDirectory() as directory:
             xml_path = Path(directory) / "timeline.xml"
             drp_path = Path(directory) / "edit.drp"
@@ -111,8 +112,8 @@ class ResolveWorkerTests(unittest.TestCase):
 
             media_pool.ImportTimelineFromFile.assert_called_once_with(str(xml_path))
             manager.ExportProject.assert_called_once_with("edit", str(drp_path), False)
-            manager.CloseProject.assert_not_called()
-            manager.DeleteProject.assert_not_called()
+            manager.CloseProject.assert_called_once_with(project)
+            manager.DeleteProject.assert_called_once_with("edit")
             self.assertEqual(drp_path.read_bytes(), b"DRP")
 
     def test_cleans_up_after_import_failure(self):
@@ -205,6 +206,130 @@ class ResolveWorkerTests(unittest.TestCase):
             self.assertEqual(placement["mediaPoolItem"], item)
             self.assertEqual(placement["recordFrame"], 86442)
             manager.ExportProject.assert_called_once_with("edit", str(drp_path), False)
+            self.assertEqual(drp_path.read_bytes(), b"DRP")
+
+    def test_builds_every_manifest_sequence_into_one_drp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            media_path = folder / "source.mov"
+            media_path.touch()
+            manifest_path = folder / "timeline.json"
+            manifest_path.write_text(json.dumps({
+                "timeline_name": "Main",
+                "frame_rate": "23.976",
+                "media_paths": [str(media_path)],
+                "timelines": [
+                    {
+                        "timeline_name": "Main", "frame_rate": "23.976",
+                        "width": 1920, "height": 1080,
+                        "clips": [{
+                            "path": str(media_path), "start_frame": 0, "end_frame": 10,
+                            "record_frame": 0, "media_type": 1, "track_index": 1,
+                        }],
+                    },
+                    {
+                        "timeline_name": "Episode", "frame_rate": "25.000",
+                        "width": 3840, "height": 2160,
+                        "clips": [{
+                            "path": str(media_path), "start_frame": 10, "end_frame": 20,
+                            "record_frame": 48, "media_type": 1, "track_index": 2,
+                        }],
+                    },
+                ],
+            }))
+            drp_path = folder / "edit.drp"
+            item = Mock()
+            item.GetClipProperty.return_value = {
+                "Clip Name": media_path.name,
+                "Clip Directory": str(media_path.parent),
+            }
+            timelines = [Mock(), Mock()]
+            for timeline in timelines:
+                timeline.GetStartFrame.return_value = 86400
+                timeline.GetTrackCount.return_value = 2
+                timeline.GetItemListInTrack.return_value = [object()]
+            pool = Mock()
+            pool.ImportMedia.return_value = [item]
+            pool.CreateEmptyTimeline.side_effect = timelines
+            pool.AppendToTimeline.side_effect = [[object()], [object()]]
+            project = Mock()
+            project.GetMediaPool.return_value = pool
+            manager = Mock()
+            manager.GetCurrentProject.return_value = None
+            manager.CreateProject.return_value = project
+            manager.ExportProject.side_effect = lambda _name, path, _stills: Path(path).write_bytes(b"DRP") > 0
+            resolve = Mock()
+            resolve.GetProjectManager.return_value = manager
+
+            warnings = export_manifest(resolve, manifest_path, drp_path)
+
+            self.assertEqual(pool.CreateEmptyTimeline.call_args_list, [
+                unittest.mock.call("Main"), unittest.mock.call("Episode"),
+            ])
+            self.assertEqual(pool.AppendToTimeline.call_count, 2)
+            self.assertEqual(pool.AppendToTimeline.call_args_list[1].args[0][0]["recordFrame"], 86448)
+            timelines[0].SetSettings.assert_called_once_with({
+                "timelineFrameRate": "23.976", "timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
+            })
+            timelines[1].SetSettings.assert_called_once_with({
+                "timelineFrameRate": "25.000", "timelineResolutionWidth": "3840", "timelineResolutionHeight": "2160",
+            })
+            self.assertEqual(warnings, [])
+            self.assertEqual(drp_path.read_bytes(), b"DRP")
+
+    @mock.patch("premiere_to_resolve.resolve_api_worker.create_offline_proxies")
+    def test_assembles_all_placements_through_temporary_offline_media(self, create_proxies):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            source_path = str(folder / "missing-source.mov")
+            proxy_path = str(folder / "proxies" / "source.mp4")
+            create_proxies.return_value = {source_path: proxy_path}
+            manifest_path = folder / "timeline.json"
+            manifest_path.write_text(json.dumps({
+                "timeline_name": "Assembly",
+                "frame_rate": "23.976024",
+                "media_paths": [source_path],
+                "clips": [{
+                    "path": source_path, "start_frame": 100, "end_frame": 160,
+                    "record_frame": 42, "media_type": 1, "track_index": 1,
+                }],
+            }))
+            drp_path = folder / "edit.drp"
+            item = Mock()
+            item.GetClipProperty.return_value = {
+                "Clip Name": Path(proxy_path).name,
+                "Clip Directory": str(Path(proxy_path).parent),
+            }
+            timeline = Mock()
+            timeline.GetStartFrame.return_value = 86400
+            timeline.GetTrackCount.return_value = 1
+            timeline.GetItemListInTrack.return_value = [object()]
+            pool = Mock()
+            pool.ImportMedia.return_value = [item]
+            pool.CreateEmptyTimeline.return_value = timeline
+            pool.AppendToTimeline.return_value = [object()]
+            project = Mock()
+            project.GetMediaPool.return_value = pool
+            manager = Mock()
+            manager.GetCurrentProject.return_value = None
+            manager.CreateProject.return_value = project
+            manager.SaveProject.return_value = True
+            manager.ExportProject.side_effect = lambda _name, path, _stills: Path(path).write_bytes(b"DRP") > 0
+            resolve = Mock()
+            resolve.GetProjectManager.return_value = manager
+
+            warnings = export_manifest(
+                resolve, manifest_path, drp_path, proxy_dir=folder / "proxies"
+            )
+
+            create_proxies.assert_called_once_with(
+                [source_path], folder / "proxies", 160, "23.976024"
+            )
+            pool.ImportMedia.assert_called_once_with([proxy_path])
+            placement = pool.AppendToTimeline.call_args.args[0][0]
+            self.assertEqual(placement["mediaPoolItem"], item)
+            self.assertEqual(placement["recordFrame"], 86442)
+            self.assertTrue(any("офлайн-ссылки" in warning for warning in warnings))
             self.assertEqual(drp_path.read_bytes(), b"DRP")
 
 

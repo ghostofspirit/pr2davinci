@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 
 from premiere_to_resolve.drp_archive import DrpArchiveError, inspect_drp_archive
+from premiere_to_resolve.offline_media import repoint_drp_media
 
 
 def write_project(path: Path, sequence: str) -> None:
@@ -63,6 +64,44 @@ class DrpArchiveTests(unittest.TestCase):
         self.path.write_bytes(b"not a zip")
         with self.assertRaisesRegex(DrpArchiveError, "Не удалось прочитать DRP"):
             inspect_drp_archive(self.path)
+
+    def test_repoints_proxy_paths_in_media_pool_blob_and_timeline_xml(self):
+        proxy = Path(self.temp.name) / "media" / "proxy-001.mp4"
+        target = Path(self.temp.name) / "footage" / "Кадр.mp4"
+
+        def varint(value):
+            result = bytearray()
+            while value > 0x7F:
+                result.append((value & 0x7F) | 0x80)
+                value >>= 7
+            result.append(value)
+            return bytes(result)
+
+        payload = b"\x0a" + varint(len(str(proxy.parent).encode())) + str(proxy.parent).encode()
+        payload += b"\x12" + varint(len(proxy.name.encode())) + proxy.name.encode()
+        blob = b"\x00\x00\x00\x00" + len(payload).to_bytes(4, "big") + payload
+        with zipfile.ZipFile(self.path, "w") as archive:
+            archive.writestr("project.xml", "<Project/>")
+            archive.writestr(
+                "MediaPool/Master/MpFolder.xml",
+                f'<Sm2MpFolder><Sm2MpVideoClip><Name>{proxy.name}</Name><MediaClip>{blob.hex()}</MediaClip></Sm2MpVideoClip></Sm2MpFolder>',
+            )
+            archive.writestr(
+                "SeqContainer/timeline.xml",
+                f"<Sm2SequenceContainer><MediaFilePath>{proxy}</MediaFilePath></Sm2SequenceContainer>",
+            )
+
+        changed = repoint_drp_media(self.path, {str(proxy): str(target)})
+
+        self.assertGreater(changed[str(proxy)], 0)
+        with zipfile.ZipFile(self.path) as archive:
+            media_xml = archive.read("MediaPool/Master/MpFolder.xml").decode()
+            timeline_xml = archive.read("SeqContainer/timeline.xml").decode()
+        self.assertIn(target.name, media_xml)
+        self.assertIn(str(target), timeline_xml)
+        found = bytes.fromhex(media_xml.split("<MediaClip>", 1)[1].split("</MediaClip>", 1)[0])
+        self.assertIn(str(target.parent).encode(), found)
+        self.assertIn(target.name.encode(), found)
 
 
 if __name__ == "__main__":

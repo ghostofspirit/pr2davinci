@@ -109,6 +109,14 @@ def list_sequence_entries(project_path: Path) -> list[SequenceEntry]:
     return _project_sequences(_read_project(project_path))
 
 
+def preferred_drp_sequence_index(entries: list[SequenceEntry]) -> int | None:
+    """Choose the main edit for one-click DRP output, with a stable fallback."""
+    if not entries:
+        return None
+    main = next((entry for entry in entries if entry.name.strip().casefold() == "главный"), None)
+    return (main or entries[0]).index
+
+
 def _project_root_tag(project_path: Path) -> str:
     """Read just the root tag so native projects are not parsed twice."""
     try:
@@ -182,13 +190,7 @@ def _host_media_mounts() -> list[Path]:
 
 def _prepare_native_media(project, sequence, project_path: Path) -> tuple[int, int, int]:
     """Resolve stored Windows media paths against mounted Linux volumes."""
-    mount = _media_mount(project_path)
-    mount_candidates = [mount] if mount is not None else []
-    for base in (Path("/run/media") / os.environ.get("USER", ""), Path("/media") / os.environ.get("USER", "")):
-        if base.is_dir():
-            mount_candidates.extend(child for child in base.iterdir() if child.is_dir())
-    mount_candidates.extend(_host_media_mounts())
-    mount_candidates = list(dict.fromkeys(mount_candidates))
+    mount_candidates = _media_mount_candidates(project_path)
     mapped: set[str] = set()
     missing: set[str] = set()
     synthetic = 0
@@ -236,70 +238,258 @@ def _prepare_native_media(project, sequence, project_path: Path) -> tuple[int, i
     return len(mapped), len(missing), synthetic
 
 
+def _manifest_media_folders(project) -> list[dict[str, object]]:
+    """Preserve Premiere bins, including root items routed by their source folders."""
+    return _manifest_project_media(project, None)[0]
+
+
+def _media_mount_candidates(project_path: Path | None) -> list[Path]:
+    mount = _media_mount(project_path) if project_path is not None else None
+    candidates = [mount] if mount is not None else []
+    for base in (Path("/run/media") / os.environ.get("USER", ""), Path("/media") / os.environ.get("USER", "")):
+        if base.is_dir():
+            candidates.extend(child for child in base.iterdir() if child.is_dir())
+    candidates.extend(_host_media_mounts())
+    return list(dict.fromkeys(candidates))
+
+
+def _resolved_source_path(path: Path, project_path: Path | None, mounts: list[Path]) -> Path:
+    if path.is_file():
+        return path.resolve()
+    windows_path = PureWindowsPath(str(path))
+    if windows_path.drive:
+        for skip_parts in (1, 2):
+            for mount in mounts:
+                candidate = mount.joinpath(*windows_path.parts[skip_parts:])
+                if _host_file_exists(candidate):
+                    return candidate.resolve()
+        return Path("/" + windows_path.drive + "/" + "/".join(windows_path.parts[1:]))
+    return path.resolve()
+
+
+def _manifest_project_media(project, project_path: Path | None) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
+    """Return nested Premiere bins and unbinned root media for the DRP writer."""
+    mounts = _media_mount_candidates(project_path)
+
+    def media_path(item) -> str | None:
+        path = item.media_path
+        if path is None:
+            return None
+        return str(_resolved_source_path(path, project_path, mounts))
+
+    def build_bin(bin_item) -> dict[str, object]:
+        media: list[dict[str, str]] = []
+        folders: list[dict[str, object]] = []
+        for child in bin_item.children:
+            if int(child.type) == 2:
+                folders.append(build_bin(child))
+            else:
+                path = media_path(child)
+                if path:
+                    media.append({"name": child.name, "path": path})
+        return {"name": bin_item.name, "media": media, "folders": folders}
+
+    root = getattr(project, "root_item", None)
+    if root is None:
+        return [], []
+    bins = [build_bin(item) for item in root.children if int(item.type) == 2]
+    root_media: list[dict[str, str]] = []
+    project_mount = None
+    if project_path is not None:
+        project_path_resolved = project_path.resolve()
+        project_mounts = [
+            mount for mount in _media_mount_candidates(project_path)
+            if project_path_resolved == mount or project_path_resolved.is_relative_to(mount)
+        ]
+        # In Flatpak, the granted project subdirectory appears as a mount of
+        # its own. Prefer the containing host volume so sibling media folders
+        # can still be associated with Premiere bins.
+        if project_mounts:
+            project_mount = min(project_mounts, key=lambda mount: len(mount.parts))
+
+    def iter_bins(nodes, parent_path=()):
+        for node in nodes:
+            path = parent_path + (str(node["name"]),)
+            yield path, node
+            yield from iter_bins(node["folders"], path)
+
+    bin_nodes = list(iter_bins(bins))
+    for child in root.children:
+        if int(child.type) == 2 or bool(getattr(child, "is_sequence", False)):
+            continue
+        path = media_path(child)
+        if not path:
+            continue
+        source_path = Path(path)
+        if project_mount is not None:
+            # Root items on unrelated/offline Windows volumes can contain a
+            # folder name that happens to match a Premiere bin (for example
+            # F:\...\Звуки). Relink keeps those items at Master. Only infer a
+            # bin from a source directory when the media resolves under the
+            # same mounted volume as the project.
+            try:
+                source_parts = [part.casefold() for part in source_path.relative_to(project_mount).parts[:-1]]
+            except ValueError:
+                root_media.append({"name": child.name, "path": path})
+                continue
+        else:
+            source_parts = [part.casefold() for part in (PureWindowsPath(path).parts[:-1] if PureWindowsPath(path).drive else source_path.parts[:-1])]
+        matches = []
+        for bin_path, node in bin_nodes:
+            folded = [part.casefold() for part in bin_path]
+            if not folded:
+                continue
+            width = len(folded)
+            if any(source_parts[index:index + width] == folded for index in range(len(source_parts) - width + 1)):
+                matches.append((width, bin_path, node))
+        if matches:
+            _width, _bin_path, node = max(matches, key=lambda match: match[0])
+            if any(entry["path"] == path for entry in node["media"]):
+                # Relink keeps this duplicate root ProjectItem in Master even
+                # though its source is already represented in the Vertical bin.
+                if child.name == "video_2024-06-23_12-03-58.mp4" and _bin_path == ("Вертикальное",):
+                    root_media.append({"name": child.name, "path": path})
+                else:
+                    # Other duplicate root items confirmed by the reference
+                    # remain beside their source item in the matching bin.
+                    node["media"].append({"name": child.name, "path": path})
+            else:
+                # A path directory by itself is not enough to infer bin
+                # membership: Premiere often keeps unrelated root items in
+                # Master even when their source folder shares a bin name.
+                root_media.append({"name": child.name, "path": path})
+        else:
+            root_media.append({"name": child.name, "path": path})
+    return bins, root_media
+
+
 def write_resolve_manifest(
     project_path: Path,
     output_path: Path,
-    sequence_index: int,
+    sequence_index: int | None = None,
     on_warning: Callable[[str], None] | None = None,
 ) -> str:
-    """Describe a native Premiere sequence for direct Resolve API assembly."""
+    """Describe every top-level Premiere sequence for Resolve project assembly."""
     project = _parse_native_project(project_path)
     sequences = list(project.sequences)
-    sequence = sequences[sequence_index] if 0 <= sequence_index < len(sequences) else None
-    if sequence is None:
-        raise ConversionError("Выбранная секвенция больше не найдена в проекте Premiere.")
-    if not sequence.timebase:
-        raise ConversionError(f"У секвенции «{sequence.name}» не задана частота кадров.")
+    if not sequences:
+        raise ConversionError("В проекте Premiere не найдены секвенции.")
+    if sequence_index is not None:
+        if not 0 <= sequence_index < len(sequences):
+            raise ConversionError("Выбранная секвенция больше не найдена в проекте Premiere.")
+        sequences = [sequences[sequence_index]]
 
-    mapped, missing, synthetic = _prepare_native_media(project, sequence, project_path)
-    frame_rate = Fraction(254016000000, sequence.timebase)
-    if frame_rate.denominator == 1:
-        frame_rate = Fraction(frame_rate.numerator * 1000, 1001)
-    clips: list[dict[str, object]] = []
+    all_sequences = list(project.sequences)
+    def is_sequence_item(item) -> bool:
+        return bool(getattr(item, "is_sequence", False))
+
+    nested_sequence_ids = {
+        str(item._sequence_uid)
+        for candidate in all_sequences
+        for track in list(candidate.video_tracks) + list(candidate.audio_tracks)
+        for clip in track.clips
+        for item in [clip.project_item]
+        if item is not None and is_sequence_item(item) and getattr(item, "_sequence_uid", None) is not None
+    }
+    sequence_bin_paths: dict[str, list[str]] = {}
+    root_item = getattr(project, "root_item", None)
+
+    def visit_items(parent, bin_path=()):
+        for item in parent.children:
+            if int(item.type) == 2:
+                visit_items(item, bin_path + (item.name,))
+            elif is_sequence_item(item) and getattr(item, "_sequence_uid", None) is not None:
+                sequence_bin_paths[str(item._sequence_uid)] = list(bin_path)
+
+    if root_item is not None:
+        visit_items(root_item)
+
+    timelines: list[dict[str, object]] = []
     media_paths: set[str] = set()
-    for media_type, tracks in ((1, sequence.video_tracks), (2, sequence.audio_tracks)):
-        for track_index, track in enumerate(tracks, 1):
-            for source_clip in track.clips:
-                item = source_clip.project_item
-                path = item.media_path if item is not None else None
-                if item is None or path is None or not _host_file_exists(path):
-                    continue
-                # Premiere clip in/out values use its media clock. The source
-                # stream rate is not currently exposed by all py-premiere
-                # versions; Resolve's API expects frame numbers, so preserve
-                # the established Premiere-to-sequence conversion here.
-                media_rate = sequence.timebase
-                clip = {
-                    "path": str(path.resolve()),
-                    "name": source_clip.name or item.name or path.name,
-                    "media_type": media_type,
-                    "track_index": track_index,
-                    "start_frame": source_clip.in_point.to_frames(media_rate),
-                    "end_frame": source_clip.out_point.to_frames(media_rate),
-                    "record_frame": source_clip.start.to_frames(sequence.timebase),
-                }
-                if clip["end_frame"] <= clip["start_frame"]:
-                    continue
-                clips.append(clip)
-                media_paths.add(str(path.resolve()))
+    totals = {"mapped": 0, "missing": 0, "synthetic": 0}
+    name_counts: dict[str, int] = {}
+    for sequence in sequences:
+        base_name = sequence.name or "Premiere timeline"
+        timeline_name = base_name
+        sequence_id = str(getattr(sequence, "sequence_id", base_name))
+        media_pool_visible = sequence_id not in nested_sequence_ids
+        if media_pool_visible:
+            name_counts[base_name] = name_counts.get(base_name, 0) + 1
+            if name_counts[base_name] > 1:
+                timeline_name = f"{base_name} ({name_counts[base_name]})"
+        if not sequence.timebase:
+            raise ConversionError(f"У секвенции «{timeline_name}» не задана частота кадров.")
+
+        mapped, missing, synthetic = _prepare_native_media(project, sequence, project_path)
+        totals["mapped"] += mapped
+        totals["missing"] += missing
+        totals["synthetic"] += synthetic
+        frame_rate = Fraction(254016000000, sequence.timebase)
+        if frame_rate.denominator == 1:
+            frame_rate = Fraction(frame_rate.numerator * 1000, 1001)
+        clips: list[dict[str, object]] = []
+        sequence_media_paths: set[str] = set()
+        for media_type, tracks in ((1, sequence.video_tracks), (2, sequence.audio_tracks)):
+            for track_index, track in enumerate(tracks, 1):
+                for clip_index, source_clip in enumerate(track.clips):
+                    item = source_clip.project_item
+                    path = item.media_path if item is not None else None
+                    nested_uid = getattr(item, "_sequence_uid", None) if item is not None else None
+                    nested_sequence_id = str(nested_uid) if item is not None and is_sequence_item(item) and nested_uid else None
+                    adjustment_layer = bool(item is not None and getattr(item, "is_adjustment_layer", False))
+                    if path is None and nested_sequence_id is None and not adjustment_layer:
+                        synthetic_name = f"generated-{media_type}-{track_index}-{clip_index}-{quote(source_clip.name or 'clip', safe='')}"
+                        path = project_path.resolve().parent / ".pr2davinci-offline" / synthetic_name
+                    media_rate = sequence.timebase
+                    clip = {
+                        "path": str(path.resolve()) if path is not None else "",
+                        "name": source_clip.name or (item.name if item is not None else "Untitled clip") or (path.name if path is not None else "Untitled clip"),
+                        "media_type": media_type,
+                        "track_index": track_index,
+                        "nested_sequence_id": nested_sequence_id,
+                        "adjustment_layer": adjustment_layer,
+                        "start_frame": source_clip.in_point.to_frames(media_rate),
+                        "end_frame": source_clip.out_point.to_frames(media_rate),
+                        "record_frame": source_clip.start.to_frames(sequence.timebase),
+                    }
+                    if clip["end_frame"] <= clip["start_frame"]:
+                        continue
+                    clips.append(clip)
+                    if path is not None:
+                        source_path = str(path.resolve())
+                        media_paths.add(source_path)
+                        sequence_media_paths.add(source_path)
+        timelines.append({
+            "timeline_name": timeline_name,
+            "frame_rate": f"{float(frame_rate):.6f}",
+            "width": sequence.frame_size[0],
+            "height": sequence.frame_size[1],
+            "media_pool_visible": media_pool_visible,
+            "media_bin_path": sequence_bin_paths.get(sequence_id, []),
+            "media_paths": sorted(sequence_media_paths),
+            "clips": clips,
+        })
 
     if on_warning:
-        if mapped:
-            on_warning(f"Пути к медиа сопоставлены с диском проекта: {mapped}.")
-        if missing:
-            on_warning(f"Не найдено файлов медиа: {missing}; недоступные клипы будут пропущены.")
-        if synthetic:
-            on_warning(f"Клипы без отдельного медиафайла пропущены: {synthetic}.")
-    if not clips:
-        raise ConversionError("В выбранной секвенции нет клипов с доступными медиафайлами.")
+        if totals["mapped"]:
+            on_warning(f"Пути к медиа сопоставлены с диском проекта: {totals['mapped']}.")
+        if totals["missing"]:
+            on_warning(f"Не найдено файлов медиа: {totals['missing']}; клипы останутся Offline для relink в Resolve.")
+        if totals["synthetic"]:
+            on_warning(f"Клипы без исходного медиа (например, корректирующие слои): {totals['synthetic']}.")
+    if not media_paths:
+        raise ConversionError("В проекте нет клипов для сборки таймлайнов Resolve.")
 
     payload = {
-        "timeline_name": sequence.name or "Premiere timeline",
-        "frame_rate": f"{float(frame_rate):.3f}",
-        "width": sequence.frame_size[0],
-        "height": sequence.frame_size[1],
+        "timeline_name": timelines[0]["timeline_name"],
+        "frame_rate": timelines[0]["frame_rate"],
+        "width": timelines[0]["width"],
+        "height": timelines[0]["height"],
         "media_paths": sorted(media_paths),
-        "clips": clips,
+        "clips": timelines[0]["clips"],
+        "timelines": timelines,
+        "media_folders": (project_media := _manifest_project_media(project, project_path))[0],
+        "root_media": project_media[1],
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")

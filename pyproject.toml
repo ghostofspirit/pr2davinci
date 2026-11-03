@@ -1,9 +1,9 @@
 [project]
 name = "premiere-to-resolve"
-version = "1.0.0"
+version = "2.0.0"
 description = "Transfer Premiere Pro projects to DaVinci Resolve Studio"
 requires-python = ">=3.10"
-dependencies = ["PySide6>=6.7,<7", "py-premiere>=0.1.0,<0.2"]
+dependencies = ["PySide6>=6.7,<7", "py-premiere>=0.1.0,<0.2", "zstandard>=0.23,<1"]
 
 [project.scripts]
 premiere-to-resolve = "premiere_to_resolve.gui:main"
@@ -17,7 +17,7 @@ mode = "standalone"
 extra_args = "--include-package-data=premiere_to_resolve"
 
 [tool.setuptools.package-data]
-premiere_to_resolve = ["assets/*.png"]
+premiere_to_resolve = ["assets/*.png", "assets/*.drp", "assets/*.txt"]
 
 [tool.setuptools]
 packages = ["premiere_to_resolve"]

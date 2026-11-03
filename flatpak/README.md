@@ -4,10 +4,9 @@ The manifest uses KDE's Qt 6.11 runtime and PySide BaseApp, which bundles the
 matching Python/Qt bindings. It grants access to the user's home directory so
 the app can open Premiere projects and write interchange files there. The
 launcher and application window use the Leonardo portrait cutout as their icon.
-For one-click DRP transfer, the app uses `flatpak-spawn --host` to invoke the
-Resolve Studio scripting runtime installed on the host. This requires external
-scripting to be enabled in Resolve Studio and means the Flatpak can launch that
-host application when the user requests a transfer.
+DRP export is authored locally from Resolve project templates. Saving a DRP does
+not launch Resolve, switch its project, or require external scripting to be
+enabled. Open the resulting `.drp` in Resolve and relink media there as needed.
 
 Install the build tools and runtime SDKs from Flathub, then build and install
 the local Flatpak repository:

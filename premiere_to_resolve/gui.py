@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import sys
+import tempfile
 
-from PySide6.QtCore import QSettings, QRectF, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QSettings, QRectF, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -26,45 +27,36 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .converter import SequenceEntry, convert_project, list_sequence_entries, write_resolve_manifest
-from .resolve_transfer import (
-    ResolveInstallation,
-    ResolveProjectSwitchRequired,
-    ResolveTransferError,
-    find_resolve_installation,
-    installation_from_path,
-    temporary_interchange_directory,
-    transfer_manifest_to_resolve,
-    transfer_xml_to_resolve,
-)
+from .converter import SequenceEntry, convert_project, list_sequence_entries, preferred_drp_sequence_index, write_resolve_manifest
+from .direct_drp import DirectDrpError, create_drp_from_manifest
 
 
 TEXT = {
     "ru": {
         "window": "Premiere → Resolve",
-        "title": "Перенесите монтаж в Resolve",
-        "subtitle": "Выберите проект Premiere и передайте монтаж в DaVinci Resolve Studio.",
+        "title": "Сохраните проект для Resolve",
+        "subtitle": "Выберите проект Premiere и сохраните его в DRP — без запуска Resolve.",
         "source": "ПРОЕКТ PREMIERE",
         "drop_title": "Перетащите сюда файл .prproj",
         "drop_hint": "или выберите его на компьютере",
         "choose": "Выбрать проект",
         "change": "Изменить файл",
-        "sequence": "Секвенция",
-        "select_sequence": "Выберите секвенцию",
+        "sequence": "Секвенции проекта",
+        "all_sequences": "В DRP сохранятся все секвенции и папки проекта (основная: «{name}»)",
         "select_project_first": "Сначала выберите проект Premiere",
         "output_placeholder": "Имя DRP-файла",
         "destination_placeholder": "Папка появится после выбора проекта",
         "destination": "Папка сохранения",
         "browse": "Обзор",
         "output_name": "Имя файла",
-        "convert": "Передать проект в Resolve Studio",
-        "export_xml": "Сохранить XML",
-        "export_fcpxml": "Сохранить FCPXML",
+        "convert": "Сохранить DRP",
+        "export_xml": "Сохранить XML первой секвенции",
+        "export_fcpxml": "Сохранить FCPXML первой секвенции",
         "busy": "Анализирую проект…",
         "ready": "ГОТОВО К КОНВЕРТАЦИИ",
         "idle": "ОЖИДАЕТ ПРОЕКТ",
         "working": "В РАБОТЕ",
-        "complete": "ПЕРЕДАНО В RESOLVE",
+        "complete": "DRP СОХРАНЁН",
         "complete_xml": "XML СОХРАНЁН",
         "failed": "ОШИБКА",
         "resolve_busy": "ЗАКРОЙТЕ ПРОЕКТ RESOLVE",
@@ -72,58 +64,52 @@ TEXT = {
         "log_empty": "Здесь появятся этапы обработки проекта.",
         "log_read": "Читаю структуру Premiere…",
         "log_sequences": "Найдено секвенций: {count}",
-        "log_convert": "Готовлю таймлайн «{name}» для Resolve…",
+        "log_convert": "Готовлю проект «{name}» для Resolve…",
         "log_write": "Файл сохранён: {path}",
-        "log_launch_resolve": "Запускаю DaVinci Resolve Studio…",
-        "log_transfer_resolve": "Импортирую таймлайн и создаю DRP…",
+        "log_direct_drp": "Собираю все секвенции и папки проекта в DRP…",
         "log_drp_verified": "Проверен DRP: {video} видео, {audio} аудиоклипов, {media} медиафайлов.",
-        "log_done": "Готово. Проект передан в Resolve и сохранён как DRP.",
+        "log_done": "Готово. DRP сохранён — откройте его в Resolve для проверки и relink медиа.",
         "log_xml_done": "Готово. XML-файл сохранён.",
         "log_warning": "Внимание: {warning}",
         "log_error": "Не удалось обработать проект: {error}",
         "result": "Файл готов",
         "show_file": "Показать в папке",
         "again": "Выбрать другой проект",
-        "handoff_title": "Автоматическая передача в Resolve Studio",
-        "handoff_text": "Если Resolve не запущен, PR2DAVINCI откроет его. Для локальной передачи один раз включите внешнее scripting: Preferences → System → General → External scripting using → Local.",
-        "supported": "Для передачи нужен DaVinci Resolve Studio с включённым внешним scripting. Если в Resolve открыт проект, PR2DAVINCI спросит разрешение сохранить его, временно закрыть и затем снова открыть. Эффекты и сложные элементы могут потребовать ручной настройки.",
-        "switch_project_title": "В Resolve открыт проект",
-        "switch_project_prompt": "Чтобы передать монтаж, PR2DAVINCI должен сохранить проект «{name}», временно закрыть его, создать DRP и затем снова открыть ваш проект. Продолжить?",
+        "handoff_title": "Офлайн-сборка DRP",
+        "handoff_text": "PR2DAVINCI создаёт файл DRP напрямую. DaVinci Resolve не запускается и не меняет открытый проект.",
+        "supported": "Готовый DRP можно открыть в DaVinci Resolve и самостоятельно relink-нуть медиа. Исходники могут отображаться как Media Offline. Эффекты и сложные элементы монтажа могут потребовать ручной настройки.",
         "choose_file": "Выберите проект Premiere",
         "choose_filter": "Проекты Premiere (*.prproj);;Все файлы (*)",
         "choose_folder": "Папка для DRP",
-        "choose_resolve": "Укажите исполняемый файл DaVinci Resolve Studio",
-        "resolve_filter": "DaVinci Resolve (Resolve; Resolve.exe);;Все файлы (*)",
-        "resolve_missing": "Не удалось определить путь к ResolvePython. Выберите исполняемый файл Resolve Studio — PR2DAVINCI попробует найти API рядом с ним.",
         "invalid_sequence": "В проекте не найдены секвенции.",
         "file_missing": "Файл проекта не найден.",
         "language": "Язык интерфейса",
     },
     "en": {
         "window": "Premiere → Resolve",
-        "title": "Bring your edit into Resolve",
-        "subtitle": "Choose a Premiere project and send the edit to DaVinci Resolve Studio.",
+        "title": "Save your project for Resolve",
+        "subtitle": "Choose a Premiere project and save it as a DRP — without launching Resolve.",
         "source": "PREMIERE PROJECT",
         "drop_title": "Drop a .prproj file here",
         "drop_hint": "or browse your computer",
         "choose": "Choose project",
         "change": "Change file",
-        "sequence": "Sequence",
-        "select_sequence": "Choose a sequence",
+        "sequence": "Project sequences",
+        "all_sequences": "DRP will include all project timelines and bins (main: “{name}”)",
         "select_project_first": "Choose a Premiere project first",
         "output_placeholder": "DRP file name",
         "destination_placeholder": "Destination appears after project selection",
         "destination": "Save folder",
         "browse": "Browse",
         "output_name": "File name",
-        "convert": "Send project to Resolve Studio",
-        "export_xml": "Save XML",
-        "export_fcpxml": "Save FCPXML",
+        "convert": "Save DRP",
+        "export_xml": "Save XML for first sequence",
+        "export_fcpxml": "Save FCPXML for first sequence",
         "busy": "Reading project…",
         "ready": "READY TO CONVERT",
         "idle": "WAITING FOR PROJECT",
         "working": "WORKING",
-        "complete": "SENT TO RESOLVE",
+        "complete": "DRP SAVED",
         "complete_xml": "XML SAVED",
         "failed": "ERROR",
         "resolve_busy": "CLOSE RESOLVE PROJECT",
@@ -131,29 +117,23 @@ TEXT = {
         "log_empty": "Project steps will appear here.",
         "log_read": "Reading Premiere structure…",
         "log_sequences": "Sequences found: {count}",
-        "log_convert": "Preparing “{name}” for Resolve…",
+        "log_convert": "Preparing project “{name}” for Resolve…",
         "log_write": "File saved: {path}",
-        "log_launch_resolve": "Launching DaVinci Resolve Studio…",
-        "log_transfer_resolve": "Importing the timeline and creating the DRP…",
+        "log_direct_drp": "Building all project timelines and bins into a DRP…",
         "log_drp_verified": "DRP verified: {video} video clips, {audio} audio clips, {media} media files.",
-        "log_done": "Done. The project was sent to Resolve and exported as a DRP.",
+        "log_done": "Done. DRP saved — open it in Resolve to review and relink media.",
         "log_xml_done": "Done. The XML file has been saved.",
         "log_warning": "Attention: {warning}",
         "log_error": "Could not process the project: {error}",
         "result": "File ready",
         "show_file": "Show in folder",
         "again": "Choose another project",
-        "handoff_title": "Automatic transfer to Resolve Studio",
-        "handoff_text": "If Resolve is not running, PR2DAVINCI will launch it. Enable external scripting once in Preferences → System → General → External scripting using → Local.",
-        "supported": "Transfer requires DaVinci Resolve Studio with external scripting enabled. If a project is open, PR2DAVINCI will ask before saving it, temporarily closing it, and reopening it. Effects and complex timeline elements may need manual adjustment.",
-        "switch_project_title": "A Resolve project is open",
-        "switch_project_prompt": "To send this edit, PR2DAVINCI must save “{name}”, temporarily close it, create the DRP, and then reopen your project. Continue?",
+        "handoff_title": "Offline DRP authoring",
+        "handoff_text": "PR2DAVINCI writes the DRP file directly. DaVinci Resolve is not launched and any open project is left untouched.",
+        "supported": "Open the saved DRP in DaVinci Resolve and relink media there. Sources may show as Media Offline. Effects and complex edit elements may need manual adjustment.",
         "choose_file": "Choose a Premiere project",
         "choose_filter": "Premiere projects (*.prproj);;All files (*)",
         "choose_folder": "Choose DRP destination",
-        "choose_resolve": "Select the DaVinci Resolve Studio executable",
-        "resolve_filter": "DaVinci Resolve (Resolve; Resolve.exe);;All files (*)",
-        "resolve_missing": "Could not locate ResolvePython. Select the Resolve Studio executable; PR2DAVINCI will look for the API runtime nearby.",
         "invalid_sequence": "No sequences were found in this project.",
         "file_missing": "Project file not found.",
         "language": "Interface language",
@@ -165,7 +145,6 @@ class TaskThread(QThread):
     inspected = Signal(str, list)
     converted = Signal(str)
     failed = Signal(str)
-    project_switch_required = Signal(str)
     log = Signal(str, object)
 
     def __init__(
@@ -175,20 +154,15 @@ class TaskThread(QThread):
         output: Path | None = None,
         sequence: str | None = None,
         sequence_index: int | None = None,
-        resolve_installation: ResolveInstallation | None = None,
         native_project: bool = False,
-        allow_project_switch: bool = False,
     ):
         super().__init__()
         self.mode = mode
         self.source = source
-        self.native_project = False
         self.output = output
         self.sequence = sequence
         self.sequence_index = sequence_index
-        self.resolve_installation = resolve_installation
         self.native_project = native_project
-        self.allow_project_switch = allow_project_switch
 
     def run(self) -> None:
         try:
@@ -199,36 +173,18 @@ class TaskThread(QThread):
                 return
             assert self.output is not None
             self.log.emit("log_convert", {"name": self.sequence or ""})
-            if self.mode == "transfer":
-                if self.resolve_installation is None:
-                    raise ResolveTransferError("Не задан путь к DaVinci Resolve Studio.")
-                with temporary_interchange_directory() as temporary_directory:
+            if self.mode == "drp":
+                if not self.native_project:
+                    raise DirectDrpError("Офлайн-сборка DRP сейчас принимает нативные проекты Premiere (.prproj). Для XML/FCPXML сохраните interchange-файл.")
+                cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pr2davinci" / "interchange"
+                cache.mkdir(parents=True, exist_ok=True)
+                with tempfile.TemporaryDirectory(prefix="direct-drp-", dir=cache) as temporary_directory:
                     on_warning = lambda warning: self.log.emit("log_warning", {"warning": warning})
+                    manifest_path = Path(temporary_directory) / "timelines.json"
+                    write_resolve_manifest(self.source, manifest_path, self.sequence_index, on_warning)
+                    self.log.emit("log_direct_drp", {})
                     on_log = lambda key, values: self.log.emit(key, values)
-                    if self.native_project:
-                        manifest_path = Path(temporary_directory) / "timeline.json"
-                        write_resolve_manifest(self.source, manifest_path, self.sequence_index, on_warning)
-                        self.output = transfer_manifest_to_resolve(
-                            manifest_path,
-                            self.output,
-                            self.resolve_installation,
-                            on_log=on_log,
-                            allow_project_switch=self.allow_project_switch,
-                        )
-                    else:
-                        xml_path = Path(temporary_directory) / "timeline.xml"
-                        convert_project(
-                            self.source, xml_path, self.sequence, self.sequence_index,
-                            on_warning=on_warning,
-                            output_format="xmeml",
-                        )
-                        self.output = transfer_xml_to_resolve(
-                            xml_path,
-                            self.output,
-                            self.resolve_installation,
-                            on_log=on_log,
-                            allow_project_switch=self.allow_project_switch,
-                        )
+                    self.output = create_drp_from_manifest(manifest_path, self.output, on_log=on_log)
             else:
                 convert_project(
                     self.source, self.output, self.sequence, self.sequence_index,
@@ -236,8 +192,6 @@ class TaskThread(QThread):
                 )
             self.log.emit("log_write", {"path": str(self.output)})
             self.converted.emit(str(self.output))
-        except ResolveProjectSwitchRequired as error:
-            self.project_switch_required.emit(error.project_name)
         except Exception as error:
             self.failed.emit(str(error))
 
@@ -308,7 +262,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("Cutover", "PremiereToResolve")
-        self.resolve_path = self.settings.value("resolve/executable", "")
         self.language = self.settings.value("language", "ru")
         if self.language not in TEXT:
             self.language = "ru"
@@ -316,9 +269,8 @@ class MainWindow(QMainWindow):
         self.native_project = False
         self.output: Path | None = None
         self.task: TaskThread | None = None
-        self._allow_project_switch = False
         self.error_message: str | None = None
-        self.sequence_prompt = "select_project_first"
+        self.sequence_entries: list[SequenceEntry] = []
         self.logs: list[tuple[str, dict]] = []
         self.setWindowTitle(TEXT[self.language]["window"])
         icon_path = Path(__file__).resolve().parent / "assets" / "leonardo-icon-512.png"
@@ -423,12 +375,11 @@ class MainWindow(QMainWindow):
         sequence_box.setSpacing(7)
         self.sequence_label = QLabel()
         self.sequence_label.setObjectName("fieldLabel")
-        self.sequence = QComboBox()
+        self.sequence = QLineEdit()
         self.sequence.setObjectName("field")
         self.sequence.setMinimumHeight(44)
-        self.sequence.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.sequence.setMaxVisibleItems(12)
-        self.sequence.addItem(self.tr("select_project_first"))
+        self.sequence.setReadOnly(True)
+        self.sequence.setText(self.tr("select_project_first"))
         self.sequence.setEnabled(False)
         self.sequence_progress_page = QWidget()
         progress_layout = QGridLayout(self.sequence_progress_page)
@@ -617,7 +568,6 @@ class MainWindow(QMainWindow):
         self.convert_button.clicked.connect(self.start_conversion)
         self.export_xml_button.clicked.connect(self.start_xml_export)
         self.show_file_button.clicked.connect(self.show_output)
-        self.sequence.currentIndexChanged.connect(self._update_convert_enabled)
         open_action = QAction(self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.choose_source)
@@ -639,6 +589,12 @@ class MainWindow(QMainWindow):
         self.drop_hint.setText(self.tr("drop_hint") if self.source is None else self.tr("change"))
         self.choose_button.setText(self.tr("choose") if self.source is None else self.tr("change"))
         self.sequence_label.setText(self.tr("sequence"))
+        if self.sequence_entries:
+            index = preferred_drp_sequence_index(self.sequence_entries)
+            chosen = next((entry for entry in self.sequence_entries if entry.index == index), self.sequence_entries[0])
+            self.sequence.setText(self.tr("all_sequences", name=chosen.name))
+        elif self.source is None:
+            self.sequence.setText(self.tr("select_project_first"))
         self.sequence_progress_label.setText(self.tr("busy"))
         self.destination_label.setText(self.tr("destination"))
         self.destination.setPlaceholderText(self.tr("destination_placeholder"))
@@ -653,8 +609,6 @@ class MainWindow(QMainWindow):
         self.support_note.setText(self.tr("supported"))
         self.lang_ru.setChecked(self.language == "ru")
         self.lang_en.setChecked(self.language == "en")
-        if self.sequence.count():
-            self.sequence.setItemText(0, self.tr(self.sequence_prompt))
         self._render_state()
         self._render_logs()
         if not self.logs and self.source is None:
@@ -716,9 +670,8 @@ class MainWindow(QMainWindow):
         self.result.setStyleSheet("")
         self.show_file_button.hide()
         self.show_file_button.setEnabled(False)
-        self.sequence.clear()
-        self.sequence_prompt = "busy"
-        self.sequence.addItem(self.tr("busy"))
+        self.sequence_entries = []
+        self.sequence.setText(self.tr("busy"))
         self.sequence.setEnabled(False)
         self.sequence_progress_label.setText(self.tr("busy"))
         self.sequence_controls.setCurrentWidget(self.sequence_progress_page)
@@ -739,7 +692,6 @@ class MainWindow(QMainWindow):
         task.inspected.connect(self._on_inspected)
         task.converted.connect(self._on_converted)
         task.failed.connect(self._on_failed)
-        task.project_switch_required.connect(self._on_project_switch_required)
         task.finished.connect(self._on_task_finished)
         task.start()
         self._render_state()
@@ -748,28 +700,19 @@ class MainWindow(QMainWindow):
     def _on_inspected(self, path: str, entries: list[SequenceEntry]) -> None:
         if self.source is None or Path(path) != self.source:
             return
-        self.sequence.clear()
+        self.sequence_entries = entries
         self.native_project = bool(entries and entries[0].native)
         self.sequence_controls.setCurrentWidget(self.sequence)
         if not entries:
-            self.sequence_prompt = "invalid_sequence"
-            self.sequence.addItem(self.tr(self.sequence_prompt))
+            self.sequence.setText(self.tr("invalid_sequence"))
             self.error_message = self.tr("invalid_sequence")
             self.state.setStyleSheet("color: #f3b58c; background: #3b2922; border-radius: 9px; padding: 6px 9px; font-size: 9px; font-weight: 800; letter-spacing: 1px;")
             self._append_log("log_error", {"error": self.tr("invalid_sequence")})
             self._render_state()
             return
-        self.sequence_prompt = "select_sequence"
-        self.sequence.addItem(self.tr(self.sequence_prompt))
-        counts: dict[str, int] = {}
-        for entry in entries:
-            counts[entry.name] = counts.get(entry.name, 0) + 1
-        for entry in entries:
-            label = entry.name
-            if counts[entry.name] > 1:
-                label = f"{entry.name} · ID {entry.premiere_id}"
-            self.sequence.addItem(label, entry.index)
-        self.sequence.setCurrentIndex(0)
+        index = preferred_drp_sequence_index(entries)
+        chosen = next((entry for entry in entries if entry.index == index), entries[0])
+        self.sequence.setText(self.tr("all_sequences", name=chosen.name))
         self.sequence.setEnabled(True)
         self._append_log("log_sequences", {"count": len(entries)})
         self.export_xml_button.setText(self.tr("export_fcpxml" if self.native_project else "export_xml"))
@@ -793,22 +736,6 @@ class MainWindow(QMainWindow):
         self.result.setStyleSheet("color: #efad8d;")
         self.show_file_button.hide()
 
-    def _on_project_switch_required(self, project_name: str) -> None:
-        answer = QMessageBox.question(
-            self,
-            self.tr("switch_project_title"),
-            self.tr("switch_project_prompt", name=project_name),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer == QMessageBox.StandardButton.Yes:
-            self._allow_project_switch = True
-            QTimer.singleShot(100, self.start_conversion)
-        else:
-            self.error_message = None
-            cancelled = "Передача отменена." if self.language == "ru" else "Transfer cancelled."
-            self._append_log("log_warning", {"warning": cancelled})
-
     def _on_task_finished(self) -> None:
         task = self.sender()
         if task is self.task:
@@ -821,33 +748,15 @@ class MainWindow(QMainWindow):
 
     def _update_convert_enabled(self, *_args) -> None:
         busy = self.task is not None and self.task.isRunning()
-        has_selection = self.source is not None and self.sequence.currentData() is not None and self.sequence.isEnabled()
-        self.convert_button.setEnabled(bool(has_selection and not busy))
-        self.export_xml_button.setEnabled(bool(has_selection and not busy))
+        has_project = self.source is not None and bool(self.sequence_entries) and self.sequence.isEnabled()
+        self.convert_button.setEnabled(bool(has_project and not busy))
+        self.export_xml_button.setEnabled(bool(has_project and not busy))
         self.choose_button.setEnabled(not busy)
         self.browse_button.setEnabled(not busy)
 
     def start_conversion(self) -> None:
-        if self.source is None or self.sequence.currentData() is None:
+        if self.source is None or not self.sequence_entries:
             return
-        installation = installation_from_path(self.resolve_path) if self.resolve_path else None
-        if installation is None:
-            installation = find_resolve_installation()
-        if installation is None:
-            path, _ = QFileDialog.getOpenFileName(
-                self,
-                self.tr("choose_resolve"),
-                "",
-                self.tr("resolve_filter"),
-            )
-            if not path:
-                return
-            installation = installation_from_path(path)
-            if installation is None:
-                QMessageBox.warning(self, self.tr("window"), self.tr("resolve_missing"))
-                return
-            self.resolve_path = path
-            self.settings.setValue("resolve/executable", path)
         output = self._output_path(".drp")
         self.output = None
         self.error_message = None
@@ -859,17 +768,14 @@ class MainWindow(QMainWindow):
         self.progress.show()
         self.logs.clear()
         self._start_task(TaskThread(
-            "transfer", self.source, output,
-            sequence=self.sequence.currentText(),
-            sequence_index=self.sequence.currentData(),
-            resolve_installation=installation,
+            "drp", self.source, output,
+            sequence=self.source.stem,
+            sequence_index=None,
             native_project=self.native_project,
-            allow_project_switch=self._allow_project_switch,
         ))
-        self._allow_project_switch = False
 
     def start_xml_export(self) -> None:
-        if self.source is None or self.sequence.currentData() is None:
+        if self.source is None or not self.sequence_entries:
             return
         output = self._output_path(".fcpxml" if self.native_project else ".xml")
         self.output = None
@@ -883,8 +789,8 @@ class MainWindow(QMainWindow):
         self.logs.clear()
         self._start_task(TaskThread(
             "convert", self.source, output,
-            sequence=self.sequence.currentText(),
-            sequence_index=self.sequence.currentData(),
+            sequence=self.sequence_entries[0].name,
+            sequence_index=self.sequence_entries[0].index,
         ))
 
     def _output_path(self, extension: str) -> Path:
