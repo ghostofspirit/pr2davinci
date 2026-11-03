@@ -64,4 +64,4 @@ install -D -m 0644 premiere_to_resolve/assets/leonardo-icon-512.png \
 
 %changelog
 * Wed Nov 04 2026 PR2DAVINCI contributors - 2.0.0-1
-- Initial Fedora RPM package for the V2 preview
+- Fedora RPM package for PR2DAVINCI 2.0.0

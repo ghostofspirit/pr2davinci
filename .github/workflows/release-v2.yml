@@ -1,4 +1,4 @@
-name: Build and publish PR2DAVINCI V2 Linux preview
+name: Build and publish PR2DAVINCI V2 Linux release
 
 on:
   push:
@@ -83,7 +83,7 @@ jobs:
           retention-days: 2
 
   publish:
-    name: Publish V2 Linux preview release
+    name: Publish V2 Linux release
     needs: [flatpak, rpm]
     runs-on: ubuntu-latest
     steps:
@@ -99,19 +99,19 @@ jobs:
           name: Fedora-44-RPM
           path: release-assets
 
-      - name: Create preview release and attach Flatpak
+      - name: Create release and attach Linux packages
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           cat > release-notes.md <<'EOF'
-          # PR2DAVINCI 2.0 Preview
+          # PR2DAVINCI 2.0.0
 
-          **English:** V2 creates a DaVinci Resolve DRP directly from a native Premiere Pro project. The archive includes project timelines and bins; media may need relinking. Resolve import validation remains a manual preview step.
+          **English:** PR2DAVINCI 2.0.0 converts a native Premiere Pro project into a DaVinci Resolve DRP. The archive includes project timelines and bins; offline media can be relinked in Resolve. The release has been opened and checked in Resolve.
 
-          **Русский:** V2 напрямую создаёт DRP DaVinci Resolve из проекта Premiere Pro. В архив входят секвенции и папки проекта; медиа может потребовать relink. Проверка открытия в Resolve остаётся ручным шагом для preview-версии.
+          **Русский:** PR2DAVINCI 2.0.0 преобразует проект Premiere Pro в DRP DaVinci Resolve. В архив входят секвенции и папки проекта; офлайн-медиа можно перелинковать в Resolve. Релиз проверен открытием в Resolve.
 
-          This preview provides a Linux x86_64 Flatpak and a Fedora 44 RPM. Windows and macOS builds are not included yet. The packages are unsigned and separate from older releases.
+          Linux packages: Flatpak for x86_64 and RPM for Fedora 44. Windows, macOS, and DEB packages are not included in this release. The packages are unsigned.
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* \
@@ -119,7 +119,6 @@ jobs:
           else
             gh release create "$RELEASE_TAG" release-assets/* \
               --repo "$GITHUB_REPOSITORY" \
-              --title "PR2DAVINCI 2.0 Preview" \
-              --prerelease \
+              --title "PR2DAVINCI 2.0.0" \
               --notes-file release-notes.md
           fi
