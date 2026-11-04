@@ -1,21 +1,145 @@
 # PR2DAVINCI
-Adobe Premiere to DaVinci Resolve Project Converter
+
+**Adobe Premiere Pro → DaVinci Resolve — V2.0.0**
 
 <p align="center">
   <img src="premiere_to_resolve/assets/leonardo-prime-minister.png" alt="Leonardo da Vinci as a prime minister — PR2DAVINCI mascot" width="420">
 </p>
 
-Эта ветка содержит **PR2DAVINCI 2** — экспериментальную кроссплатформенную
-GUI-версию для переноса проектов Adobe Premiere Pro в DaVinci Resolve.
-Стабильный релиз **1.0.0** остаётся в `main`.
+**[English](#english) | [Русский](#русский)**
 
-V2 читает нативный `.prproj` и создаёт `.drp` напрямую, без установленного или
-запущенного Resolve. В архив попадают секвенции, папки и медиаобъекты проекта;
-медиа может отображаться как `Media Offline`, чтобы монтажёр сделал relink в
-Resolve. Интерфейс доступен на русском и английском; Qt/PySide позволяет
-собирать приложение для Linux, macOS и Windows.
+## English
 
-## Запуск
+V2 converts a native Premiere `.prproj` project into a DaVinci Resolve `.drp`
+file. It writes the DRP directly, so Resolve does not need to be installed or
+running during conversion. The same exporter is available in the desktop GUI
+and command line.
+
+V2.0.0 is the stable release. The source is on the
+[`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
+Downloads:
+
+- [Flatpak for x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
+- [RPM for Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
+- [Windows x86_64 GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-windows-x86_64.zip)
+- [macOS Apple Silicon GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-arm64.zip)
+- [macOS Intel GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-x86_64.zip)
+
+### What V2 does
+
+- Includes the project's timelines, media pool bins, and media references in
+  the DRP.
+- Leaves source media offline when it is not available, so it can be relinked
+  in Resolve later.
+- Offers the same DRP export through the GUI and the `premiere-to-resolve-drp`
+  command.
+- Does not launch Resolve or modify a project already open there.
+
+The generated archive has been compared offline with a Relink-created DRP and
+opened successfully in Resolve on a real project. Effects, transitions,
+retiming, multicam, Essential Graphics, and Lumetri may still need review or
+reconstruction.
+
+### Run V2 from source
+
+Python 3.10 or newer is required.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+premiere-to-resolve
+```
+
+On Windows, activate the environment with `.venv\\Scripts\\activate`.
+
+To create a DRP from the whole Premiere project:
+
+```bash
+premiere-to-resolve-drp input.prproj -o output.drp
+```
+
+The command saves all project timelines and bins without launching Resolve. If
+the output name already exists, it chooses the next available name, such as
+`output (2).drp`. The older `premiere-to-resolve-cli` command remains available
+for FCP 7 XML interchange.
+
+### Linux Flatpak
+
+Install the downloaded bundle (it includes the GUI and direct DRP CLI). Flatpak
+may offer to install its KDE runtime from Flathub:
+
+```bash
+flatpak install --user ./PR2DAVINCI-v2.0.0-linux-x86_64.flatpak
+```
+
+Launch the GUI with `flatpak run --user com.serotoninja.PremiereToResolve`.
+To export a project from the command line:
+
+```bash
+flatpak run --user --command=premiere-to-resolve-drp \
+  com.serotoninja.PremiereToResolve \
+  "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
+```
+
+### Fedora RPM
+
+Download the RPM for Fedora 44 and install it with DNF:
+
+```bash
+sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
+```
+
+The package includes the GUI and DRP CLI. DEB packages are not available yet.
+
+### Windows and macOS
+
+Unzip the Windows package and launch `PR2DAVINCI.exe`. On macOS, unzip the
+package and open `PR2DAVINCI.app`; because the app is unsigned, Control-click it
+and choose **Open** on first launch if Gatekeeper blocks it. These packages
+provide the GUI; the standalone DRP command-line interface is currently
+included in the Linux packages and source installation.
+
+### License
+
+PR2DAVINCI source and materials are dedicated to the public domain under
+[CC0 1.0 Universal](LICENSE). Third-party components retain their own licenses;
+see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+---
+
+## Русский
+
+V2 преобразует нативный проект Premiere `.prproj` в проект DaVinci Resolve
+`.drp`. DRP создаётся напрямую: устанавливать или запускать Resolve во время
+конвертации не нужно. Один и тот же экспорт доступен в графическом интерфейсе и
+командной строке.
+
+V2.0.0 — стабильный релиз. Исходный код — в ветке
+[`v2/direct-drp`](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
+Сборки:
+
+- [Flatpak для x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
+- [RPM для Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
+- [GUI для Windows x86_64 (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-windows-x86_64.zip)
+- [GUI для macOS Apple Silicon (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-arm64.zip)
+- [GUI для macOS Intel (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-x86_64.zip)
+
+### Что умеет V2
+
+- Переносит в DRP секвенции, папки Media Pool и ссылки на медиа проекта.
+- Если исходники недоступны, они остаются Offline — монтажёр может сделать
+  relink в Resolve.
+- Создаёт DRP одинаковым экспортом из GUI и командой
+  `premiere-to-resolve-drp`.
+- Не запускает Resolve и не меняет открытый в нём проект.
+
+Структура архива офлайн сравнивалась с DRP, созданным Relink; готовый проект
+открыт и проверен в Resolve на реальном материале. Эффекты, переходы,
+изменение скорости, multicam, Essential Graphics и Lumetri всё ещё могут
+потребовать проверки или ручного восстановления.
+
+### Запуск V2 из исходников
 
 Нужен Python 3.10 или новее.
 
@@ -26,90 +150,56 @@ python -m pip install .
 premiere-to-resolve
 ```
 
-На Windows активируйте окружение командой `.venv\\Scripts\\activate`.
-При первом запуске окно можно переключить между русским и английским.
+В Windows активируйте окружение командой `.venv\\Scripts\\activate`.
 
-## Конвертация
-
-Перетащите `.prproj` в окно или выберите его кнопкой. GUI автоматически выбирает
-основную секвенцию для показа, а при сохранении включает в DRP все секвенции и
-папки проекта. Укажите папку и имя файла, затем нажмите «Сохранить DRP». Файл
-собирается локально — Resolve не запускается и открытый проект не меняется.
-После сохранения откройте DRP в Resolve, проверьте таймлайны и сделайте relink
-исходников. XML сохраняется отдельно для ручного импорта:
-FCPXML для нативных `.prproj` и FCP 7 XML для XML-представления Premiere.
-Структура V2 офлайн-сверена с проектом Relink; открытие этой сборки в Resolve
-пока ожидает ручной проверки.
-
-Нативные `.prproj` разбираются библиотекой py-premiere и экспортируются в
-FCPXML 1.9 — формат, который Resolve импортирует напрямую. Клиповые точки,
-дорожки, тайминг и доступные ссылки на медиа переносятся; если Windows-пути
-можно сопоставить с подключённым диском проекта, приложение делает это
-автоматически. Несопоставленные файлы потребуют relink в Resolve, а в журнале
-будут отмечены пропущенные синтетические клипы и неподдержанные эффекты,
-переходы или изменение скорости. Вложенные и multicam-секвенции,
-Essential Graphics и Lumetri могут требовать ручной проверки.
-
-Разбор Premiere использует стороннюю библиотеку [py-premiere](https://github.com/Pouf/py-premiere)
-(MIT License); её лицензия распространяется вместе с установленным пакетом.
-
-Исходный код и материалы PR2DAVINCI посвящены общественному достоянию по
-CC0 1.0 Universal; см. [`LICENSE`](LICENSE). Лицензии сторонних компонентов
-и ограничения на права третьих лиц остаются в силе.
-
-## Сборка desktop-приложения
-
-PySide6 поддерживает desktop на Linux, macOS и Windows. Создавайте отдельную
-сборку на каждой целевой ОС: запустите следующие команды на компьютере с этой
-системой. Qt for Python рекомендует `pyside6-deploy` для сборки приложения.
-
-```bash
-python -m pip install .
-pyside6-deploy launch_gui.py
-```
-
-Готовый standalone-бандл и промежуточные файлы сборки появятся в папках,
-указанных в `pysidedeploy.spec` и конфигурации Qt. Первый запуск `pyside6-deploy`
-создаёт `pysidedeploy.spec`; после проверки параметров его удобно хранить
-вместе с проектом.
-
-Сборка и запуск проверены только в текущем Linux-окружении. Для готовых
-артефактов Windows и macOS нужны сборочные машины или CI runners этих систем.
-
-### Flatpak для Linux
-
-Готовый пакет для Linux x86_64 можно скачать со страницы [релиза PR2DAVINCI v1.0.0](https://github.com/ghostofspirit/pr2davinci/releases/tag/v1.0.0):
-[PR2DAVINCI-1.0.0-x86_64.flatpak](https://github.com/ghostofspirit/pr2davinci/releases/download/v1.0.0/PR2DAVINCI-1.0.0-x86_64.flatpak).
-
-Установка и запуск скачанного пакета:
-
-```sh
-flatpak install --user ./PR2DAVINCI-1.0.0-x86_64.flatpak
-flatpak run --user com.serotoninja.PremiereToResolve
-```
-
-Пакету нужен KDE runtime 6.11 из Flathub. Если Flatpak предложит установить его,
-подтвердите установку.
-
-Манифест Flatpak и команды сборки находятся в [`flatpak/README.md`](flatpak/README.md).
-Для запуска конвертера в Flatpak ему разрешён доступ к домашней папке, чтобы
-открывать проекты Premiere и сохранять DRP-файлы.
-
-## Командная строка
-
-В V2 один и тот же прямой экспорт DRP доступен через GUI и командную строку.
-Команда `premiere-to-resolve-drp` принимает нативный `.prproj`, сохраняет все
-секвенции и папки проекта и не запускает Resolve:
+Чтобы сохранить весь проект Premiere в DRP:
 
 ```bash
 premiere-to-resolve-drp input.prproj -o output.drp
 ```
 
-Если файл с таким именем уже существует, конвертер подберёт свободное имя с
-суффиксом `(2)`, `(3)` и так далее. Для просмотра секвенций и экспорта
-interchange XML остаётся команда `premiere-to-resolve-cli`:
+Команда включает все секвенции и папки проекта и не запускает Resolve. Если
+указанное имя файла уже занято, будет выбрано следующее свободное, например
+`output (2).drp`. Для обмена через FCP 7 XML остаётся команда
+`premiere-to-resolve-cli`.
+
+### Linux Flatpak
+
+Установите скачанный bundle. В него входят GUI и прямая CLI-команда экспорта DRP:
 
 ```bash
-premiere-to-resolve-cli input.prproj --list-sequences
-premiere-to-resolve-cli input.prproj -o timeline.fcpxml --sequence "Edit v3"
+flatpak install --user ./PR2DAVINCI-v2.0.0-linux-x86_64.flatpak
 ```
+
+Запустить GUI можно командой `flatpak run --user com.serotoninja.PremiereToResolve`.
+Чтобы создать DRP из командной строки:
+
+```bash
+flatpak run --user --command=premiere-to-resolve-drp \
+  com.serotoninja.PremiereToResolve \
+  "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
+```
+
+### Fedora RPM
+
+Скачайте RPM для Fedora 44 и установите его через DNF:
+
+```bash
+sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
+```
+
+В пакет входят GUI и CLI для DRP. Пакет DEB пока недоступен.
+
+### Windows и macOS
+
+Распакуйте Windows-архив и запустите `PR2DAVINCI.exe`. На macOS распакуйте
+архив и откройте `PR2DAVINCI.app`; поскольку приложение не подписано, если
+Gatekeeper заблокирует запуск, нажмите на него правой кнопкой с зажатой Control
+и выберите **Открыть**. В этих пакетах есть GUI; отдельная CLI-команда DRP
+пока входит в Linux-пакеты и устанавливается из исходников.
+
+### Лицензия
+
+Исходный код и материалы PR2DAVINCI посвящены общественному достоянию по
+[лицензии CC0 1.0 Universal](LICENSE). У сторонних компонентов свои лицензии;
+см. [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
