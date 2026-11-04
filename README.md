@@ -1,6 +1,6 @@
 # PR2DAVINCI
 
-**Adobe Premiere Pro → DaVinci Resolve — V2.0 Preview**
+**Adobe Premiere Pro → DaVinci Resolve — V2.0.0**
 
 <p align="center">
   <img src="premiere_to_resolve/assets/leonardo-prime-minister.png" alt="Leonardo da Vinci as a prime minister — PR2DAVINCI mascot" width="420">
@@ -15,10 +15,12 @@ file. It writes the DRP directly, so Resolve does not need to be installed or
 running during conversion. The same exporter is available in the desktop GUI
 and command line.
 
-V2 is a preview. Its source is on the
+V2.0.0 is the stable release. The source is on the
 [`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Download the Linux x86_64 Flatpak from the
-[PR2DAVINCI V2.0 Preview release](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0-preview.3/PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak).
+Linux downloads:
+
+- [Flatpak for x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
+- [RPM for Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
 
 ### What V2 does
 
@@ -30,10 +32,10 @@ Download the Linux x86_64 Flatpak from the
   command.
 - Does not launch Resolve or modify a project already open there.
 
-The generated archive has been compared offline with a Relink-created DRP.
-Opening the V2-generated file in Resolve still needs manual validation. Effects,
-transitions, retiming, multicam, Essential Graphics, and Lumetri may need review
-or reconstruction.
+The generated archive has been compared offline with a Relink-created DRP and
+opened successfully in Resolve on a real project. Effects, transitions,
+retiming, multicam, Essential Graphics, and Lumetri may still need review or
+reconstruction.
 
 ### Run V2 from source
 
@@ -61,10 +63,11 @@ for FCP 7 XML interchange.
 
 ### Linux Flatpak
 
-Install the downloaded bundle (it includes the GUI and direct DRP CLI):
+Install the downloaded bundle (it includes the GUI and direct DRP CLI). Flatpak
+may offer to install its KDE runtime from Flathub:
 
 ```bash
-flatpak install --user ./PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak
+flatpak install --user ./PR2DAVINCI-v2.0.0-linux-x86_64.flatpak
 ```
 
 Launch the GUI with `flatpak run --user com.serotoninja.PremiereToResolve`.
@@ -76,7 +79,15 @@ flatpak run --user --command=premiere-to-resolve-drp \
   "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
 ```
 
-V2 does not currently provide RPM or DEB packages.
+### Fedora RPM
+
+Download the RPM for Fedora 44 and install it with DNF:
+
+```bash
+sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
+```
+
+The package includes the GUI and DRP CLI. DEB packages are not available yet.
 
 ### License
 
@@ -93,10 +104,12 @@ V2 преобразует нативный проект Premiere `.prproj` в п
 конвертации не нужно. Один и тот же экспорт доступен в графическом интерфейсе и
 командной строке.
 
-V2 пока находится в статусе Preview. Исходный код — в ветке
+V2.0.0 — стабильный релиз. Исходный код — в ветке
 [`v2/direct-drp`](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Скачать Flatpak для Linux x86_64 можно со страницы
-[релиза PR2DAVINCI V2.0 Preview](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0-preview.3/PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak).
+Сборки для Linux:
+
+- [Flatpak для x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
+- [RPM для Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
 
 ### Что умеет V2
 
@@ -107,10 +120,10 @@ V2 пока находится в статусе Preview. Исходный ко�
   `premiere-to-resolve-drp`.
 - Не запускает Resolve и не меняет открытый в нём проект.
 
-Структура архива офлайн сравнивалась с DRP, созданным Relink. Открытие DRP в
-самом Resolve ещё нужно проверить вручную. Эффекты, переходы, изменение
-скорости, multicam, Essential Graphics и Lumetri могут потребовать проверки
-или ручного восстановления.
+Структура архива офлайн сравнивалась с DRP, созданным Relink; готовый проект
+открыт и проверен в Resolve на реальном материале. Эффекты, переходы,
+изменение скорости, multicam, Essential Graphics и Lumetri всё ещё могут
+потребовать проверки или ручного восстановления.
 
 ### Запуск V2 из исходников
 
@@ -141,7 +154,7 @@ premiere-to-resolve-drp input.prproj -o output.drp
 Установите скачанный bundle. В него входят GUI и прямая CLI-команда экспорта DRP:
 
 ```bash
-flatpak install --user ./PR2DAVINCI-v2.0.0-preview.3-linux-x86_64.flatpak
+flatpak install --user ./PR2DAVINCI-v2.0.0-linux-x86_64.flatpak
 ```
 
 Запустить GUI можно командой `flatpak run --user com.serotoninja.PremiereToResolve`.
@@ -153,7 +166,15 @@ flatpak run --user --command=premiere-to-resolve-drp \
   "$HOME/path/to/input.prproj" -o "$HOME/path/to/output.drp"
 ```
 
-Пакеты RPM и DEB для V2 пока не подготовлены.
+### Fedora RPM
+
+Скачайте RPM для Fedora 44 и установите его через DNF:
+
+```bash
+sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
+```
+
+В пакет входят GUI и CLI для DRP. Пакет DEB пока недоступен.
 
 ### Лицензия
 

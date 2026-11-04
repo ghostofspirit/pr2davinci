@@ -1,4 +1,4 @@
-name: Build and publish PR2DAVINCI V2 Linux preview
+name: Build and publish PR2DAVINCI V2 Linux release
 
 on:
   push:
@@ -32,7 +32,9 @@ jobs:
           test -x build-dir/files/bin/premiere-to-resolve
           test -x build-dir/files/bin/premiere-to-resolve-drp
           asset="PR2DAVINCI-${GITHUB_REF_NAME}-linux-x86_64.flatpak"
-          flatpak build-bundle flatpak-repo "$asset" com.serotoninja.PremiereToResolve "$GITHUB_REF_NAME"
+          # flatpak-builder defaults to the "master" branch unless configured otherwise.
+          # The release tag names the asset, not the OSTree ref inside the bundle.
+          flatpak build-bundle flatpak-repo "$asset" com.serotoninja.PremiereToResolve master
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
       - name: Upload Linux package
@@ -43,9 +45,49 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+  rpm:
+    name: Build Fedora 44 RPM
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Check out tagged V2 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install RPM build dependencies
+        run: dnf install -y rpm-build python3-pip python3-pyside6 python3-zstandard gzip curl-minimal coreutils tar
+
+      - name: Build RPM
+        run: |
+          set -euxo pipefail
+          top="$GITHUB_WORKSPACE/rpmbuild"
+          mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} release-assets
+          cp packaging/rpm/premiere-to-resolve.spec "$top/SPECS/"
+          tar --directory="$GITHUB_WORKSPACE" \
+            --exclude='./.git' --exclude='./rpmbuild' --exclude='./release-assets' \
+            --transform='s,^[.]/,premiere-to-resolve-2.0.0/,' \
+            -czf "$top/SOURCES/premiere-to-resolve-2.0.0.tar.gz" .
+          wheel="$top/SOURCES/py_premiere-0.1.0-py3-none-any.whl"
+          curl -fsSL \
+            https://files.pythonhosted.org/packages/9c/47/274fbe4dbfad990ac9170792600b0a88c89abc60e73583ec4955a3a9197d/py_premiere-0.1.0-py3-none-any.whl \
+            -o "$wheel"
+          echo '955c9ddb30800e0bf6c0b03fb2b3752b52a295a9a84af7ec76ecd89b0cf0ecd1  '"$wheel" | sha256sum --check
+          rpmbuild -bb --define "_topdir $top" \
+            "$top/SPECS/premiere-to-resolve.spec"
+          cp "$top"/RPMS/noarch/*.rpm release-assets/
+
+      - name: Upload Fedora RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fedora-44-RPM
+          path: release-assets/*.rpm
+          if-no-files-found: error
+          retention-days: 2
+
   publish:
-    name: Publish V2 Linux preview release
-    needs: flatpak
+    name: Publish V2 Linux release
+    needs: [flatpak, rpm]
     runs-on: ubuntu-latest
     steps:
       - name: Download Flatpak bundle
@@ -54,19 +96,25 @@ jobs:
           name: Linux-x86_64
           path: release-assets
 
-      - name: Create preview release and attach Flatpak
+      - name: Download Fedora RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: Fedora-44-RPM
+          path: release-assets
+
+      - name: Create release and attach Linux packages
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           cat > release-notes.md <<'EOF'
-          # PR2DAVINCI 2.0 Preview
+          # PR2DAVINCI 2.0.0
 
-          **English:** V2 creates a DaVinci Resolve DRP directly from a native Premiere Pro project. The archive includes project timelines and bins; media may need relinking. Resolve import validation remains a manual preview step.
+          **English:** PR2DAVINCI 2.0.0 converts a native Premiere Pro project into a DaVinci Resolve DRP. The archive includes project timelines and bins; offline media can be relinked in Resolve. The release has been opened and checked in Resolve.
 
-          **Русский:** V2 напрямую создаёт DRP DaVinci Resolve из проекта Premiere Pro. В архив входят секвенции и папки проекта; медиа может потребовать relink. Проверка открытия в Resolve остаётся ручным шагом для preview-версии.
+          **Русский:** PR2DAVINCI 2.0.0 преобразует проект Premiere Pro в DRP DaVinci Resolve. В архив входят секвенции и папки проекта; офлайн-медиа можно перелинковать в Resolve. Релиз проверен открытием в Resolve.
 
-          This preview currently provides a Linux Flatpak build. Windows and macOS builds are not included yet. The package is unsigned and separate from older releases.
+          Linux packages: Flatpak for x86_64 and RPM for Fedora 44. Windows, macOS, and DEB packages are not included in this release. The packages are unsigned.
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* \
@@ -74,7 +122,6 @@ jobs:
           else
             gh release create "$RELEASE_TAG" release-assets/* \
               --repo "$GITHUB_REPOSITORY" \
-              --title "PR2DAVINCI 2.0 Preview" \
-              --prerelease \
+              --title "PR2DAVINCI 2.0.0" \
               --notes-file release-notes.md
           fi
