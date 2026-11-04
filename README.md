@@ -17,10 +17,13 @@ and command line.
 
 V2.0.0 is the stable release. The source is on the
 [`v2/direct-drp` branch](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Linux downloads:
+Downloads:
 
 - [Flatpak for x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
 - [RPM for Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
+- [Windows x86_64 GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-windows-x86_64.zip)
+- [macOS Apple Silicon GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-arm64.zip)
+- [macOS Intel GUI (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-x86_64.zip)
 
 ### What V2 does
 
@@ -89,6 +92,14 @@ sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
 
 The package includes the GUI and DRP CLI. DEB packages are not available yet.
 
+### Windows and macOS
+
+Unzip the Windows package and launch `PR2DAVINCI.exe`. On macOS, unzip the
+package and open `PR2DAVINCI.app`; because the app is unsigned, Control-click it
+and choose **Open** on first launch if Gatekeeper blocks it. These packages
+provide the GUI; the standalone DRP command-line interface is currently
+included in the Linux packages and source installation.
+
 ### License
 
 PR2DAVINCI source and materials are dedicated to the public domain under
@@ -106,10 +117,13 @@ V2 преобразует нативный проект Premiere `.prproj` в п
 
 V2.0.0 — стабильный релиз. Исходный код — в ветке
 [`v2/direct-drp`](https://github.com/ghostofspirit/pr2davinci/tree/v2/direct-drp).
-Сборки для Linux:
+Сборки:
 
 - [Flatpak для x86_64](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-linux-x86_64.flatpak)
 - [RPM для Fedora 44](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/premiere-to-resolve-2.0.0-1.fc44.noarch.rpm)
+- [GUI для Windows x86_64 (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-windows-x86_64.zip)
+- [GUI для macOS Apple Silicon (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-arm64.zip)
+- [GUI для macOS Intel (ZIP)](https://github.com/ghostofspirit/pr2davinci/releases/download/v2.0.0/PR2DAVINCI-v2.0.0-macos-x86_64.zip)
 
 ### Что умеет V2
 
@@ -175,6 +189,14 @@ sudo dnf install ./premiere-to-resolve-2.0.0-1.fc44.noarch.rpm
 ```
 
 В пакет входят GUI и CLI для DRP. Пакет DEB пока недоступен.
+
+### Windows и macOS
+
+Распакуйте Windows-архив и запустите `PR2DAVINCI.exe`. На macOS распакуйте
+архив и откройте `PR2DAVINCI.app`; поскольку приложение не подписано, если
+Gatekeeper заблокирует запуск, нажмите на него правой кнопкой с зажатой Control
+и выберите **Открыть**. В этих пакетах есть GUI; отдельная CLI-команда DRP
+пока входит в Linux-пакеты и устанавливается из исходников.
 
 ### Лицензия
 

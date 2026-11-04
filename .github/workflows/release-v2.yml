@@ -85,9 +85,90 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+  windows:
+    name: Build Windows x86_64 app
+    runs-on: windows-latest
+    steps:
+      - name: Check out tagged V2 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build desktop app
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . pyinstaller
+          pyinstaller --noconfirm --clean --windowed --name PR2DAVINCI `
+            --collect-data premiere_to_resolve --collect-all py_premiere --collect-all zstandard `
+            --add-data "premiere_to_resolve/resolve_api_worker.py;premiere_to_resolve" `
+            --add-data "premiere_to_resolve/offline_media.py;premiere_to_resolve" `
+            launch_gui.py
+          if (!(Test-Path "dist/PR2DAVINCI/PR2DAVINCI.exe")) { throw "Windows app executable was not created" }
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $asset = "PR2DAVINCI-$env:GITHUB_REF_NAME-windows-x86_64.zip"
+          Compress-Archive -Path dist/PR2DAVINCI -DestinationPath "release-assets/$asset"
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-x86_64
+          path: release-assets/*.zip
+          if-no-files-found: error
+          retention-days: 2
+
+  macos:
+    name: Build macOS ${{ matrix.arch }} app
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    steps:
+      - name: Check out tagged V2 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build desktop app
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . pyinstaller
+          pyinstaller --noconfirm --clean --windowed --name PR2DAVINCI \
+            --collect-data premiere_to_resolve --collect-all py_premiere --collect-all zstandard \
+            --add-data 'premiere_to_resolve/resolve_api_worker.py:premiere_to_resolve' \
+            --add-data 'premiere_to_resolve/offline_media.py:premiere_to_resolve' \
+            launch_gui.py
+          test -d dist/PR2DAVINCI.app
+          mkdir -p release-assets
+          asset="PR2DAVINCI-${GITHUB_REF_NAME}-macos-${{ matrix.arch }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/PR2DAVINCI.app "release-assets/$asset"
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-${{ matrix.arch }}
+          path: release-assets/*.zip
+          if-no-files-found: error
+          retention-days: 2
+
   publish:
-    name: Publish V2 Linux release
-    needs: [flatpak, rpm]
+    name: Publish V2 desktop release
+    needs: [flatpak, rpm, windows, macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download Flatpak bundle
@@ -102,6 +183,24 @@ jobs:
           name: Fedora-44-RPM
           path: release-assets
 
+      - name: Download Windows app
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-x86_64
+          path: release-assets
+
+      - name: Download macOS Apple Silicon app
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-arm64
+          path: release-assets
+
+      - name: Download macOS Intel app
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS-x86_64
+          path: release-assets
+
       - name: Create release and attach Linux packages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -114,7 +213,7 @@ jobs:
 
           **Русский:** PR2DAVINCI 2.0.0 преобразует проект Premiere Pro в DRP DaVinci Resolve. В архив входят секвенции и папки проекта; офлайн-медиа можно перелинковать в Resolve. Релиз проверен открытием в Resolve.
 
-          Linux packages: Flatpak for x86_64 and RPM for Fedora 44. Windows, macOS, and DEB packages are not included in this release. The packages are unsigned.
+          Linux packages: Flatpak for x86_64 and RPM for Fedora 44. Desktop app bundles are also available for Windows x86_64 and macOS arm64 and x86_64. All app bundles are unsigned; macOS may require Control-click → Open on first launch.
           EOF
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* \
