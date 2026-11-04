@@ -6,6 +6,10 @@
   <img src="premiere_to_resolve/assets/leonardo-prime-minister.png" alt="Leonardo da Vinci as a prime minister — PR2DAVINCI mascot" width="420">
 </p>
 
+<p align="center">
+  <img src="docs/images/pr2davinci-v2-main-window.png" alt="PR2DAVINCI V2 interface / интерфейс PR2DAVINCI V2" width="520">
+</p>
+
 **[English](#english) | [Русский](#русский)**
 
 ## English
