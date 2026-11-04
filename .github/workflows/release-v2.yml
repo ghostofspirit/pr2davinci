@@ -56,7 +56,7 @@ jobs:
           ref: ${{ github.ref }}
 
       - name: Install RPM build dependencies
-        run: dnf install -y git-core rpm-build python3-pip python3-pyside6 python3-zstandard gzip curl-minimal coreutils
+        run: dnf install -y rpm-build python3-pip python3-pyside6 python3-zstandard gzip curl-minimal coreutils tar
 
       - name: Build RPM
         run: |
@@ -64,8 +64,10 @@ jobs:
           top="$GITHUB_WORKSPACE/rpmbuild"
           mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} release-assets
           cp packaging/rpm/premiere-to-resolve.spec "$top/SPECS/"
-          git -c safe.directory="$GITHUB_WORKSPACE" archive --format=tar --prefix=premiere-to-resolve-2.0.0/ "$GITHUB_SHA" \
-            | gzip -n > "$top/SOURCES/premiere-to-resolve-2.0.0.tar.gz"
+          tar --directory="$GITHUB_WORKSPACE" \
+            --exclude='./.git' --exclude='./rpmbuild' --exclude='./release-assets' \
+            --transform='s,^[.]/,premiere-to-resolve-2.0.0/,' \
+            -czf "$top/SOURCES/premiere-to-resolve-2.0.0.tar.gz" .
           wheel="$top/SOURCES/py_premiere-0.1.0-py3-none-any.whl"
           curl -fsSL \
             https://files.pythonhosted.org/packages/9c/47/274fbe4dbfad990ac9170792600b0a88c89abc60e73583ec4955a3a9197d/py_premiere-0.1.0-py3-none-any.whl \
